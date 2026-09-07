@@ -1,5 +1,6 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { normalizeTrackLocks, normalizeTrackVisibility } from "./projectTrackState.js";
+import { normalizeTimelineMarkers } from "./timelineMarkers.js";
 
 export const PROJECT_ARCHIVE_FORMAT = "timeline-studio-archive";
 export const PROJECT_ARCHIVE_VERSION = 3;
@@ -83,6 +84,7 @@ export async function createProjectArchive({ project, visualSegments = [], audio
 
   const normalizedProject = {
     ...project,
+    timelineMarkers: normalizeTimelineMarkers(project?.timelineMarkers),
     trackVisibility: normalizeTrackVisibility(project?.trackVisibility),
     trackLocks: normalizeTrackLocks(project?.trackLocks),
   };
@@ -103,6 +105,7 @@ export async function readProjectArchive(file) {
   if (!files[PROJECT_FILE]) throw new Error("缺少 project.json");
   const payload = JSON.parse(strFromU8(files[PROJECT_FILE]));
   if (payload?.format !== PROJECT_ARCHIVE_FORMAT || !payload.project) throw new Error("无效工程包");
+  payload.project = { ...payload.project, timelineMarkers: normalizeTimelineMarkers(payload.project.timelineMarkers) };
   const getBlob = (entry) => entry?.path && files[entry.path]
     ? new Blob([files[entry.path]], { type: entry.type || "application/octet-stream" })
     : null;

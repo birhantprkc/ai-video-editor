@@ -5,6 +5,7 @@ import { createProjectArchive, readProjectArchive, readProjectFileAsText, resolv
 import { createCaptionSegments, getImageThumbnailCount, getVisualSegmentsTotal } from "../lib/timeline.js";
 import { normalizeSmartFrame } from "../lib/smartFrame.js";
 import { normalizeTrackLocks, normalizeTrackVisibility } from "../lib/projectTrackState.js";
+import { normalizeTimelineMarkers } from "../lib/timelineMarkers.js";
 
 export function useProjectFiles(deps) {
   const commandStateRef = useRef({ schemaVersion: 1, revision: 0, appliedOperationIds: [] });
@@ -19,6 +20,7 @@ export function useProjectFiles(deps) {
       captionStylePresetId: deps.captionStylePresetId, captionStylePresets: deps.captionStylePresets,
       captionsEnabled: deps.captionsEnabled, captionSegments: deps.captionSegments, audioSegments, musicSegments: deps.musicSegments, visualSegments, visualOverlaySegments,
       stickerSegments: deps.stickerSegments, selectedFilterId: deps.selectedFilterId,
+      timelineMarkers: normalizeTimelineMarkers(deps.timelineMarkers),
       selectedTransitionId: deps.selectedTransitionId, selectedStickerId: deps.selectedStickerId,
       trackVisibility: deps.trackVisibility, trackLocks: deps.trackLocks, timelineZoom: deps.timelineZoom, audioDuration: deps.audioDuration,
       musicName: deps.musicName, musicDuration: deps.musicDuration, musicVolume: deps.musicVolume,
@@ -53,6 +55,7 @@ export function useProjectFiles(deps) {
     deps.setSelectedSegmentId(""); deps.clearImageTrack(""); deps.clearAudioTrack("");
     deps.setVisualOverlaySegments([]); deps.setSelectedVisualOverlayId("");
     deps.clearSourceAudioTrack(""); deps.clearMusicTrack(""); deps.setStickerSegments([]);
+    deps.setTimelineMarkers?.([]);
     deps.setSelectedStickerSegmentId(""); deps.clearAllVisionState(); deps.setCurrentTime(0);
     deps.setTimelineHorizon(DEFAULT_TIMELINE_DURATION_SECONDS); deps.setTimelineZoom(1);
     deps.setShowFileMenu(false); deps.notify("已新建空白工程");
@@ -70,6 +73,7 @@ export function useProjectFiles(deps) {
       }
       const { payload, visualMedia, audioSegmentMedia, audio, sourceAudio, music } = archive;
       const data = payload.project;
+      const markers = normalizeTimelineMarkers(data.timelineMarkers);
       commandStateRef.current = data.commandState || { schemaVersion: 1, revision: 0, appliedOperationIds: [] };
       deps.setTimelineHorizon(DEFAULT_TIMELINE_DURATION_SECONDS);
       deps.setScript(typeof data.script === "string" ? data.script : DEFAULT_SCRIPT);
@@ -80,8 +84,9 @@ export function useProjectFiles(deps) {
           inheritedCaptionFontId = segment.fontId || inheritedCaptionFontId;
           return segment.fontId ? segment : { ...segment, fontId: inheritedCaptionFontId };
         });
-      deps.markTimelineViewRestored?.(Boolean(captions.length || data.visualSegments?.length || audio || sourceAudio || music));
+      deps.markTimelineViewRestored?.(Boolean(captions.length || data.visualSegments?.length || markers.length || audio || sourceAudio || music));
       deps.setCaptionSegments(captions); deps.setSelectedSegmentId(captions[0]?.id ?? "");
+      deps.setTimelineMarkers?.(markers);
       const importedVoice = VOICES.find((voice) => voice.id === normalizeVoiceId(data.selectedVoiceId)) ?? VOICES[0];
       deps.setSelectedVoiceId(importedVoice.id);
       deps.setSpeed(Number.isFinite(Number(data.speed)) && Number(data.speed) > 0

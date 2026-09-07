@@ -193,6 +193,10 @@ export function App() {
     voiceFilter, voiceTab,
   } = useEditorUiState();
   const [userAssets, setUserAssets] = useState([]);
+  const [timelineMarkers, setTimelineMarkers] = useState([]);
+  const timelineMarkerEnd = useMemo(() => timelineMarkers.reduce(
+    (end, marker) => Math.max(end, marker.type === "range" ? marker.endTime : marker.time), 0,
+  ), [timelineMarkers]);
   const { notify, toast } = useToast(2600, uiLanguage || "zh");
   const [previewVideoMediaTime, setPreviewVideoMediaTime] = useState(0);
   const [sourceAudioDragTargetLane, setSourceAudioDragTargetLane] = useState(null);
@@ -212,7 +216,7 @@ export function App() {
     script, imageSrc, visualType, imageDuration, captionPlacement, selectedVoiceId, speed,
     volume, musicName, musicDuration, musicStart, musicVolume, sourceAudioName, sourceAudioDuration,
     sourceAudioStart, sourceAudioVolume, sourceAudioSpatialEffect, sourceAudioSpatialAmount, ratioId, fitMode, selectedFilterId, selectedStickerId,
-    captionSegments, visualSegments, visualOverlaySegments, visionRecords, timelineZoom,
+    captionSegments, visualSegments, visualOverlaySegments, visionRecords, timelineZoom, timelineMarkers,
   ]);
 
   const {
@@ -238,6 +242,7 @@ export function App() {
     setUserAssets,
   });
   const { redo, undo } = useEditorHistory({
+    timelineMarkers, setTimelineMarkers,
     audioSegments, captionPlacement, captionPosition, captionSegments, captionSize,
     captionStyle, captionsEnabled, currentTime, fitMode, imageClipCount, imageDuration,
     imageMeta, imageName, imageSrc, imageUrlRefs, musicBlob, musicDuration, musicName, musicSegments, musicStart,
@@ -323,6 +328,7 @@ export function App() {
     selectedSticker, selectedStickerSegmentIndex, selectedVisualSegmentIndex, selectedVoice,
     stickerDuration, timelineDuration, visualTimeline, voiceTrackDuration,
   } = useTimelineModel({
+    timelineMarkers,
     audioSegments, captionSegments, currentTime, imageDuration, imageSrc, musicBlob,
     musicDuration, musicTimelineEnd, musicUrl, ratioId, script, selectedAudioSegmentId, selectedFilterId,
     selectedSegmentId, selectedStickerId, selectedStickerSegmentId,
@@ -1071,6 +1077,7 @@ export function App() {
   });
 
   const { startAudioSegmentMove, startMusicMove, startSourceAudioMove, startStickerSegmentMove, startStickerSegmentResize } = createTimelineMoveControls({
+    timelineMarkers, timelineDuration,
     audioSegments, captionSegments, captionTargetDuration, estimatedDuration, notify, seekTo, setActiveTool,
     setAudioSegments, setCaptionSegments, setSelectedAudioSegmentId, setSelectedStickerId,
     setSelectedStickerSegmentId, setSelectedTrack, setStickerSegments, setTimelineHorizon,
@@ -1081,6 +1088,7 @@ export function App() {
   });
 
   const startImageResize = createImageResizeControl({
+    timelineMarkers,
     audioBlob, audioDuration, captionDuration, getCurrentVisualAssetSnapshot,
     imageDuration, imageSrc, musicBlob, musicDuration, musicStart, notify, rippleTimelineAfter, script,
     setCurrentTime, setImageClipCount, setImageDuration, setSelectedTrack,
@@ -1230,6 +1238,7 @@ export function App() {
   }), [currentTime, depthRecords, previewVisualOverlays]);
 
   const { handleExportProject, handleImportProject, handleNewProject } = useProjectFiles({
+    timelineMarkers, setTimelineMarkers,
     audioBlob, audioDuration, audioSegments, captionPlacement, captionPosition, captionSegments, captionSize,
     captionStyle, captionsEnabled, captionStyleFallback: captionStyle, clearAllVisionState,
     clearAudioTrack, clearImageTrack, clearMusicTrack, clearSourceAudioTrack, fitMode,
@@ -1290,6 +1299,7 @@ export function App() {
     visualOverlaySegments, t,
   });
   const { startCaptionResize, startTimelineClipDrag } = createTimelineReorderControls({
+    timelineMarkers,
     audioSegments, captionSegments, captionTargetDuration, commitCaptionSegments, commitVisualSegments,
     notify, renderedVisualSegments, seekTo, setSelectedSegmentId, setSelectedTrack,
     setSelectedVisualSegmentId, setTimelineClipDrag, suppressTimelineClipClickRef,
@@ -1656,6 +1666,8 @@ export function App() {
       </section>
 
       <Timeline
+        timelineMarkers={timelineMarkers}
+        setTimelineMarkers={setTimelineMarkers}
         t={t}
         trOption={trOption}
         notify={notify}
@@ -1700,7 +1712,7 @@ export function App() {
         trackScrollRef={trackScrollRef}
         startTimelineSeek={startTimelineSeek}
         timelineDuration={timelineDuration}
-        timelineContentDuration={Math.max(estimatedDuration, timelineHorizon)}
+        timelineContentDuration={Math.max(estimatedDuration, timelineHorizon, timelineMarkerEnd)}
         setTimelineHorizon={setTimelineHorizon}
         currentTime={currentTime}
         previewVideoMediaTime={previewVideoMediaTime}

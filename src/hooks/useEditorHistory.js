@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import { normalizeTimelineMarkers } from "../lib/timelineMarkers.js";
 
 import {
   createEditorHistory,
@@ -37,6 +38,7 @@ function createSnapshot(d) {
     selectedFilterId: d.selectedFilterId,
     selectedTransitionId: d.selectedTransitionId,
     stickerSegments: cloneItems(d.stickerSegments),
+    timelineMarkers: normalizeTimelineMarkers(d.timelineMarkers),
     selectedStickerId: d.selectedStickerId,
     audioSegments: cloneItems(d.audioSegments),
     timelineHorizon: d.timelineHorizon,
@@ -105,6 +107,7 @@ export function createEditorSnapshotSignature(snapshot) {
       transition: snapshot.selectedTransitionId,
     },
     stickers: snapshot.stickerSegments,
+    timelineMarkers: snapshot.timelineMarkers ?? [],
     selectedStickerId: snapshot.selectedStickerId,
     audio: snapshot.audioSegments.map(mediaIdentity),
     timelineHorizon: snapshot.timelineHorizon,
@@ -175,6 +178,7 @@ function restoreSnapshot(snapshot, d) {
   d.setSelectedFilterId(snapshot.selectedFilterId);
   d.setSelectedTransitionId(snapshot.selectedTransitionId);
   d.setStickerSegments(cloneItems(snapshot.stickerSegments));
+  d.setTimelineMarkers?.(normalizeTimelineMarkers(snapshot.timelineMarkers));
   d.setSelectedStickerId(snapshot.selectedStickerId);
   d.setAudioSegments(snapshot.audioSegments.map((item) => ({
     ...item,

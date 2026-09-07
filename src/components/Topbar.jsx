@@ -74,6 +74,8 @@ export function Topbar({
   const [modelCacheInspection, setModelCacheInspection] = useState({ state: "idle", result: null });
   const shortcutModifier = getPrimaryShortcutModifier();
   const shortcutRows = [
+    ["markersAdd", "M"],
+    ["markersTitle", "Shift+M"],
     ["shortcutPlayPause", "Space"],
     ["shortcutSplit", `${shortcutModifier}+B`],
     ["shortcutDuplicate", `${shortcutModifier}+D`],

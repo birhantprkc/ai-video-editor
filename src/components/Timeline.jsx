@@ -86,6 +86,8 @@ import {
   getTimelineZoomLabel,
 } from "../lib/timelineScale.js";
 import { IconButton, WaveformStrip } from "./ui.jsx";
+import { TimelineMarkerRail, TimelineMarkerToolbar } from "./TimelineMarkers.jsx";
+import { useTimelineMarkers } from "../hooks/useTimelineMarkers.js";
 
 const TIMELINE_WHEEL_ZOOM_SENSITIVITY = 0.00056;
 const TIMELINE_WHEEL_ZOOM_COMMIT_DELAY = 180;
@@ -204,6 +206,8 @@ function getImageTimelineThumbnailCount({ duration, timelineDuration, contentWid
 
 export function Timeline({
   t,
+  timelineMarkers = [],
+  setTimelineMarkers,
   trOption,
   notify,
   undo,
@@ -332,6 +336,7 @@ export function Timeline({
   musicDuration,
   startMusicMove,
 }) {
+  const markerController = useTimelineMarkers({ timelineMarkers, setTimelineMarkers, currentTime, seekTo, t, notify, trackScrollRef, timelineDuration });
   const [transitionEditor, setTransitionEditor] = useState(null);
   const [overlayPromotionTarget, setOverlayPromotionTarget] = useState(null);
   const [overlayDragLaneCount, setOverlayDragLaneCount] = useState(0);
@@ -2348,6 +2353,7 @@ export function Timeline({
     let gesture = null;
     const handlePointerDown = (event) => {
       if (!window.matchMedia?.("(max-width: 760px)").matches || event.pointerType !== "touch") return;
+      if (event.target?.closest?.(".timeline-marker-item")) return;
       gesture = {
         pointerId: event.pointerId,
         startX: event.clientX,
@@ -2586,6 +2592,7 @@ export function Timeline({
           });
           const contentWidth = Math.max(1, track.getBoundingClientRect().width);
           const snapPoints = collectTimelineSnapPoints({
+            timelineMarkers,
             timelineDuration,
             currentTime,
             visualSegments: displayedVisualSegments,
@@ -2800,7 +2807,7 @@ export function Timeline({
 
   return (
     <section
-      className={`timeline is-selection-mode-${timelineSelectionMode} ${timelineRangeDrag?.dragging ? "is-range-dragging" : ""}`}
+      className={`timeline ${markerController.railExpanded ? "has-marker-rail" : "has-compact-markers"} is-selection-mode-${timelineSelectionMode} ${timelineRangeDrag?.dragging ? "is-range-dragging" : ""}`}
       style={{ "--range-drag-x": `${timelineRangeDrag?.dragging ? timelineRangeDrag.delta / Math.max(0.001, timelineDuration) * Math.max(1, rulerViewport.contentWidth) : 0}px` }}
       onClickCapture={(event) => {
         if (!timelineRangeDragClickGuardRef.current) return;
@@ -2882,6 +2889,7 @@ export function Timeline({
     }}>
       <div className="timeline-tools">
         <div className="timeline-icon-group">
+          <TimelineMarkerToolbar controller={markerController} t={t} currentTime={currentTime} />
           <IconButton label={t("undo")} shortcut={`${shortcutModifier}+Z`} tooltip releaseFocusOnPointer onClick={undo}>
             <ArrowCounterClockwise size={17} />
           </IconButton>
@@ -3051,6 +3059,19 @@ export function Timeline({
                 </span>
               ))}
             </div>
+            <TimelineMarkerRail controller={markerController} t={t} timelineDuration={timelineDuration}
+              setSnapGuide={setSnapGuide}
+              pausePlayback={() => { if (isPlaying) handlePlayToggle(); }}
+              getSnapPoints={(id) => collectTimelineSnapPoints({
+                timelineMarkers, timelineDuration, currentTime,
+                visualSegments: displayedVisualSegments, visualOverlaySegments,
+                captionSegments: displayedCaptionSegments, captionTargetDuration,
+                stickerSegments, audioSegments, sourceAudioDuration,
+                sourceAudioStart: sourceAudioStartPercent / 100 * timelineDuration,
+                sourceAudioLinked, linkedSourceAudioSegments,
+                musicDuration, musicStart: musicStartPercent / 100 * timelineDuration, musicSegments,
+              }, { track: "marker", id })}
+            />
             <div
               className="playhead-ruler"
               style={{ left: `${playheadPercent}%` }}

@@ -7471,7 +7471,7 @@ button:disabled {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .timeline-icon-group :is(.icon-button, .timeline-selection-trigger)[data-tooltip]::after {
+  .timeline-icon-group :is(.icon-button, .timeline-selection-trigger, .timeline-marker-trigger)[data-tooltip]::after {
     position: absolute;
     z-index: 1000;
     top: auto;
@@ -7496,7 +7496,7 @@ button:disabled {
     white-space: nowrap;
   }
 
-  .timeline-icon-group :is(.icon-button, .timeline-selection-trigger)[data-tooltip]:is(:hover, :focus-visible)::after {
+  .timeline-icon-group :is(.icon-button, .timeline-selection-trigger, .timeline-marker-trigger)[data-tooltip]:is(:hover, :focus-visible)::after {
     opacity: 1;
     transform: translate(-50%, 0);
     transition-delay: 320ms;
@@ -7712,6 +7712,95 @@ button:disabled {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   background: rgba(255, 255, 255, 0.055);
+}
+
+.timeline.has-marker-rail .timeline-board {
+  grid-template-rows: 54px auto;
+}
+
+.timeline.has-marker-rail .timeline-ruler-canvas { height: 54px; }
+.timeline.has-marker-rail .ruler { height: 28px; }
+.timeline-marker-tools { display: flex; align-items: center; flex: 0 0 auto; }
+.timeline-tools .timeline-marker-trigger {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  gap: 6px; min-height: 30px; padding: 0 9px; border: 1px solid rgba(255,255,255,.08);
+  border-radius: 6px; color: #bfd0d6; background: rgba(255,255,255,.03);
+  font: inherit; font-size: 12px; white-space: nowrap; cursor: pointer;
+}
+.timeline-tools .timeline-marker-trigger:is(:hover, :focus-visible, .is-active) {
+  color: #7af0e1; border-color: rgba(83,232,213,.35); background: rgba(53,234,217,.08);
+}
+.timeline-marker-trigger small { font-size: 11px; color: #91a6ad; font-variant-numeric: tabular-nums; }
+.timeline-tools .timeline-marker-tools .timeline-marker-trigger { border-radius: 6px 0 0 6px; }
+.timeline-tools .timeline-marker-expand {
+  width: 23px; height: 30px; min-height: 30px; border: 1px solid rgba(255,255,255,.08);
+  border-left: 0; border-radius: 0 6px 6px 0; color: #94a9b1; background: rgba(255,255,255,.03);
+}
+.timeline-tools .timeline-marker-expand:is(:hover, :focus-visible) { color: #7af0e1; background: rgba(53,234,217,.08); }
+.timeline-marker-rail {
+  position: relative; height: 26px; width: 100%; background: #111920;
+  border-bottom: 1px solid rgba(255,255,255,.055); touch-action: none;
+}
+[data-marker-color="cyan"] { --marker-color: #5bdcce; }
+[data-marker-color="amber"] { --marker-color: #efbc66; }
+[data-marker-color="violet"] { --marker-color: #b9a0f2; }
+[data-marker-color="rose"] { --marker-color: #ed95ae; }
+[data-marker-color="green"] { --marker-color: #95d692; }
+.timeline-marker-item { position: absolute; top: 0; height: 100%; color: var(--marker-color); }
+.timeline-marker-item.is-selected { z-index: 2; }
+.timeline-marker-flag {
+  position: absolute; left: 0; top: 2px; display: flex; align-items: center; gap: 4px;
+  height: 22px; padding: 0 5px 0 2px; border: 0; border-left: 2px solid currentColor;
+  border-radius: 0 3px 3px 0; color: inherit; background: #111920;
+  font: inherit; font-size: 11px; text-align: left; cursor: ew-resize; touch-action: none;
+}
+.timeline-marker-flag svg { flex: 0 0 auto; }
+.timeline-marker-item.is-at-end .timeline-marker-flag { left: auto; right: 0; border-left: 0; border-right: 2px solid currentColor; }
+.timeline-marker-flag span { max-width: var(--marker-label-max, 130px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.timeline-marker-item.is-selected .timeline-marker-flag { background: color-mix(in srgb, var(--marker-color) 18%, #111920); }
+.timeline-marker-item button:is(:hover, :focus-visible) { filter: brightness(1.2); outline: 1px solid currentColor; outline-offset: -1px; }
+.timeline-marker-range {
+  position: absolute; left: 0; width: 100%; top: 5px; height: 16px; padding: 0;
+  border: 0; border-block: 1px solid color-mix(in srgb, var(--marker-color) 55%, transparent);
+  background: color-mix(in srgb, var(--marker-color) 12%, transparent); color: inherit; cursor: grab; touch-action: none;
+}
+.timeline-marker-end { position: absolute; right: -5px; top: 2px; width: 10px; height: 22px; padding: 0; border: 0; color: inherit; background: transparent; cursor: ew-resize; touch-action: none; }
+.timeline-marker-end::after { position: absolute; left: 4px; top: 3px; bottom: 3px; width: 2px; background: currentColor; content: ""; }
+.timeline-marker-rail button:active { transform: none; }
+.timeline.has-compact-markers .timeline-board { grid-template-rows: 32px auto; }
+.timeline.has-compact-markers .timeline-ruler-canvas,
+.timeline.has-compact-markers .ruler { height: 32px; }
+.has-compact-markers .ruler-tick { padding-top: 8px; line-height: 20px; }
+.has-compact-markers .timeline-marker-rail {
+  position: absolute; top: 0; left: 0; height: 32px; border: 0;
+  background: transparent; pointer-events: none;
+}
+.has-compact-markers .timeline-marker-item { pointer-events: none; }
+.has-compact-markers .timeline-marker-range,
+.has-compact-markers .timeline-marker-end,
+.has-compact-markers .timeline-marker-flag :is(svg, span) { display: none; }
+.has-compact-markers .timeline-marker-flag {
+  left: -4px; top: 0; width: 17px; height: 31px; border: 0; padding: 0;
+  border-radius: 0; background: transparent; pointer-events: auto;
+}
+.has-compact-markers .timeline-marker-flag::before {
+  position: absolute; left: 4px; top: 2px; width: 9px; height: 8px;
+  border-radius: 1px; background: currentColor; content: "";
+  clip-path: polygon(0 0, 100% 0, 100% 70%, 0 100%);
+}
+.has-compact-markers .timeline-marker-flag::after {
+  position: absolute; left: 4px; top: 2px; bottom: 1px; width: 1px;
+  background: currentColor; opacity: .6; content: "";
+}
+.has-compact-markers .timeline-marker-item.is-selected .timeline-marker-flag { background: transparent; }
+.has-compact-markers .timeline-marker-item.is-selected .timeline-marker-flag::before { filter: brightness(1.2); }
+.has-compact-markers .timeline-marker-item.is-at-end .timeline-marker-flag { left: -13px; right: auto; }
+.has-compact-markers .timeline-marker-item.is-at-end .timeline-marker-flag::before { left: 4px; transform: scaleX(-1); }
+.has-compact-markers .timeline-marker-item.is-at-end .timeline-marker-flag::after { left: 13px; }
+@media (max-width: 760px) {
+  .timeline-tools .timeline-marker-trigger { min-height: 32px; padding: 0 7px; }
+  .timeline-tools .timeline-marker-expand { height: 32px; min-height: 32px; width: 26px; }
+  .timeline-marker-trigger > span { display: none; }
 }
 
 .timeline-board {
