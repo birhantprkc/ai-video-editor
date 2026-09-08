@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { PLAYBACK_UI_FRAME_MS, getAudioSegmentPreviewVolume, getTimelineTrackLocalTime, isTimelineTimeInsideTrack, requestTimelineMediaPlay, setTimelineAudioGain, shouldCorrectPreviewMediaTime } from "../lib/editorRuntime.js";
 import { getLinkedSourceAudioState } from "../lib/sourceAudioSync.js";
 import { isTimedSegmentLaneVisible } from "../lib/timeline.js";
-import { requestLatestVideoFrame } from "../lib/videoFrameSync.js";
+import { cancelLatestVideoFrameRequest, requestLatestVideoFrame } from "../lib/videoFrameSync.js";
 import { getVisualPlaybackRateAtTime } from "../lib/visualEffects.js";
 
 export function syncTimelineAudioElement(media, { active, shouldPlay, expectedTime, playbackRate = 1 }) {
@@ -39,6 +39,10 @@ export function syncVoiceAudioSegments({ segments, refs, timelineTime, isPlaying
 }
 
 export function useMediaSync(d) {
+  useEffect(() => {
+    const video = d.previewVideoRef.current;
+    return () => cancelLatestVideoFrameRequest(video);
+  }, [d.previewVideoRef, d.previewVisualSrc, d.previewVisualType]);
   useEffect(() => { d.audioSegments.forEach((s) => { const a = d.audioSegmentRefs.current.get(s.id); if (a) setTimelineAudioGain(a, getAudioSegmentPreviewVolume(s, d.currentTime), s.spatialEffect, s.spatialAmount); }); }, [d.audioSegments, d.currentTime]);
   useEffect(() => {
     syncVoiceAudioSegments({

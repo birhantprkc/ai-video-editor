@@ -32,17 +32,19 @@ const MEDIA_COMPATIBILITY_COPY = {
 };
 
 const COMMUNITY_LINKS_COPY = {
-  zh: { communityLinks: "社区链接", discordCommunity: "Discord 社区", githubRepository: "GitHub 仓库", resourceLinks: "Timeline Studio 资源" },
-  en: { communityLinks: "Community links", discordCommunity: "Discord community", githubRepository: "GitHub repository", resourceLinks: "Timeline Studio resources" },
-  ja: { communityLinks: "コミュニティリンク", discordCommunity: "Discord コミュニティ", githubRepository: "GitHub リポジトリ", resourceLinks: "Timeline Studio リソース" },
-  ko: { communityLinks: "커뮤니티 링크", discordCommunity: "Discord 커뮤니티", githubRepository: "GitHub 저장소", resourceLinks: "Timeline Studio 리소스" },
-  es: { communityLinks: "Enlaces de la comunidad", discordCommunity: "Comunidad de Discord", githubRepository: "Repositorio de GitHub", resourceLinks: "Recursos de Timeline Studio" },
-  fr: { communityLinks: "Liens communautaires", discordCommunity: "Communauté Discord", githubRepository: "Dépôt GitHub", resourceLinks: "Ressources de Timeline Studio" },
-  de: { communityLinks: "Community-Links", discordCommunity: "Discord-Community", githubRepository: "GitHub-Repository", resourceLinks: "Timeline-Studio-Ressourcen" },
-  pt: { communityLinks: "Links da comunidade", discordCommunity: "Comunidade do Discord", githubRepository: "Repositório do GitHub", resourceLinks: "Recursos do Timeline Studio" },
-  th: { communityLinks: "ลิงก์ชุมชน", discordCommunity: "ชุมชน Discord", githubRepository: "ที่เก็บ GitHub", resourceLinks: "แหล่งข้อมูล Timeline Studio" },
-  vi: { communityLinks: "Liên kết cộng đồng", discordCommunity: "Cộng đồng Discord", githubRepository: "Kho GitHub", resourceLinks: "Tài nguyên Timeline Studio" },
-  ru: { communityLinks: "Ссылки сообщества", discordCommunity: "Сообщество Discord", githubRepository: "Репозиторий GitHub", resourceLinks: "Ресурсы Timeline Studio" },
+  zh: { communityLinks: "社区链接", discordCommunity: "Discord 社区", githubRepository: "GitHub 仓库", xProfile: "X 主页", resourceLinks: "Timeline Studio 资源" },
+  en: { communityLinks: "Community links", discordCommunity: "Discord community", githubRepository: "GitHub repository", xProfile: "X profile", resourceLinks: "Timeline Studio resources" },
+  ja: { communityLinks: "コミュニティリンク", discordCommunity: "Discord コミュニティ", githubRepository: "GitHub リポジトリ", xProfile: "X プロフィール", resourceLinks: "Timeline Studio リソース" },
+  ko: { communityLinks: "커뮤니티 링크", discordCommunity: "Discord 커뮤니티", githubRepository: "GitHub 저장소", xProfile: "X 프로필", resourceLinks: "Timeline Studio 리소스" },
+  es: { communityLinks: "Enlaces de la comunidad", discordCommunity: "Comunidad de Discord", githubRepository: "Repositorio de GitHub", xProfile: "Perfil de X", resourceLinks: "Recursos de Timeline Studio" },
+  fr: { communityLinks: "Liens communautaires", discordCommunity: "Communauté Discord", githubRepository: "Dépôt GitHub", xProfile: "Profil X", resourceLinks: "Ressources de Timeline Studio" },
+  de: { communityLinks: "Community-Links", discordCommunity: "Discord-Community", githubRepository: "GitHub-Repository", xProfile: "X-Profil", resourceLinks: "Timeline-Studio-Ressourcen" },
+  pt: { communityLinks: "Links da comunidade", discordCommunity: "Comunidade do Discord", githubRepository: "Repositório do GitHub", xProfile: "Perfil no X", resourceLinks: "Recursos do Timeline Studio" },
+  th: { communityLinks: "ลิงก์ชุมชน", discordCommunity: "ชุมชน Discord", githubRepository: "ที่เก็บ GitHub", xProfile: "โปรไฟล์ X", resourceLinks: "แหล่งข้อมูล Timeline Studio" },
+  vi: { communityLinks: "Liên kết cộng đồng", discordCommunity: "Cộng đồng Discord", githubRepository: "Kho GitHub", xProfile: "Hồ sơ X", resourceLinks: "Tài nguyên Timeline Studio" },
+  ru: { communityLinks: "Ссылки сообщества", discordCommunity: "Сообщество Discord", githubRepository: "Репозиторий GitHub", xProfile: "Профиль X", resourceLinks: "Ресурсы Timeline Studio" },
+  it: { xProfile: "Profilo X" },
+  id: { xProfile: "Profil X" },
 };
 
 const AUDIO_SPATIAL_COPY = {

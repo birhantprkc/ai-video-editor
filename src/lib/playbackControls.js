@@ -58,13 +58,14 @@ export function createPlaybackControls(deps) {
   };
   const seekTo = (time, options = {}) => {
     const clamped = Math.max(0, Math.min(deps.timelineDurationRef.current || MAX_TIMELINE_DURATION_SECONDS, time));
+    const shouldPlay = deps.isPlaying && !options.pause;
     deps.currentTimeRef.current = clamped; deps.setCurrentTime(clamped);
     // Seeking while playback is active must also move the fallback timeline
     // clock. This matters after trimming: the video element can briefly be
     // paused/ended while its new source range is applied, so the animation
     // clock otherwise keeps its pre-seek origin and the UI remains stuck with
     // a visible Pause button.
-    if (deps.isPlaying) {
+    if (shouldPlay) {
       deps.visualPlaybackStartTimeRef.current = clamped;
       deps.visualPlaybackStartedAtRef.current = performance.now();
       deps.visualPlaybackLastUpdateRef.current = 0;
@@ -76,7 +77,7 @@ export function createPlaybackControls(deps) {
     });
     if (deps.sourceAudioRef.current) deps.sourceAudioRef.current.currentTime = getSourceState(clamped).sourceTime;
     if (deps.musicRef.current) deps.musicRef.current.currentTime = getMusicState(clamped).sourceTime;
-    if (deps.isPlaying) {
+    if (shouldPlay) {
       const video = deps.previewVideoRef.current;
       const index = getVisualSegmentIndexAtTime(deps.visualSegments, clamped);
       const segment = index >= 0 ? deps.visualSegments[index] : null;
@@ -98,22 +99,46 @@ export function createPlaybackControls(deps) {
       deps.setIsPlaying(false);
     }
     window.dispatchEvent(new CustomEvent("timeline-seek-state", { detail: { active: true } }));
-    seekTo(getTimelineTimeFromClientX(event.clientX), { immediate: true });
-    const move = (e) => seekTo(getTimelineTimeFromClientX(e.clientX));
+    // Pointer devices can deliver several moves per display frame. Keep only
+    // the newest position before doing layout reads, React updates and media
+    // seeks; the initial press and final release still commit synchronously.
+    let pendingFrame = 0;
+    let latestClientX = event.clientX;
+    const commit = (immediate = false) => {
+      pendingFrame = 0;
+      seekTo(getTimelineTimeFromClientX(latestClientX), { immediate, pause: true });
+    };
+    commit(true);
+    const isPointer = (e) => e.pointerId === event.pointerId;
+    const move = (e) => {
+      if (!isPointer(e)) return;
+      latestClientX = e.clientX;
+      if (!pendingFrame) pendingFrame = window.requestAnimationFrame(() => commit());
+    };
     const cleanup = () => {
+      if (pendingFrame) window.cancelAnimationFrame(pendingFrame);
+      pendingFrame = 0;
       removeEventListener("pointermove", move);
       removeEventListener("pointerup", up);
       removeEventListener("pointercancel", cancel);
+      removeEventListener("blur", cancel);
       window.dispatchEvent(new CustomEvent("timeline-seek-state", { detail: { active: false } }));
     };
     const up = (upEvent) => {
+      if (!isPointer(upEvent)) return;
+      latestClientX = upEvent.clientX;
       cleanup();
-      seekTo(getTimelineTimeFromClientX(upEvent.clientX), { immediate: true });
+      commit(true);
     };
-    const cancel = () => cleanup();
+    const cancel = (cancelEvent) => {
+      if (cancelEvent.type !== "blur" && !isPointer(cancelEvent)) return;
+      cleanup();
+      commit(true);
+    };
     addEventListener("pointermove", move);
-    addEventListener("pointerup", up, { once: true });
-    addEventListener("pointercancel", cancel, { once: true });
+    addEventListener("pointerup", up);
+    addEventListener("pointercancel", cancel);
+    addEventListener("blur", cancel);
   };
   const handlePlayToggle = () => {
     const video = deps.previewVideoRef.current;

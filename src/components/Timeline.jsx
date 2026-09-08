@@ -362,6 +362,7 @@ export function Timeline({
       if (active) {
         progressiveFilmstripAbortRef.current?.abort();
         progressiveFilmstripAbortRef.current = null;
+        filmstripUpgradeInFlightRef.current.forEach((controller) => controller.abort());
       }
       setTimelineSeekActive(active);
     };
@@ -1320,7 +1321,7 @@ export function Timeline({
     };
   }, [contextMenu]);
   const [localTimelineZoom, setLocalTimelineZoom] = useState(() => clampTimelineZoom(timelineZoom));
-  const filmstripUpgradeInFlightRef = useRef(new Set());
+  const filmstripUpgradeInFlightRef = useRef(new Map());
   const progressiveFilmstripAbortRef = useRef(null);
   const progressiveFilmstripStateRef = useRef(null);
   progressiveFilmstripStateRef.current = { currentTime, displayedVisualSegments, renderedVisualTimeline };
@@ -1616,9 +1617,10 @@ export function Timeline({
     visualType,
   ]);
   useEffect(() => {
-    if (localTimelineZoom < 3 || typeof setVisualSegments !== "function") return undefined;
+    if (timelineSeekActive || localTimelineZoom < 3 || typeof setVisualSegments !== "function") return undefined;
+    const inFlight = filmstripUpgradeInFlightRef.current;
     const segment = displayedVisualSegments.find((item) => {
-      if ((item.type || visualType) !== "video" || item.remoteSrc || !item.src || filmstripUpgradeInFlightRef.current.has(item.src)) return false;
+      if ((item.type || visualType) !== "video" || item.remoteSrc || !item.src || inFlight.has(item.src)) return false;
       const sourceDuration = Math.max(
         Number(item.trackFrameDuration) || 0,
         (Number(item.sourceStart) || 0) + (Number(item.sourceDuration) || Number(item.duration) || 0),
@@ -1636,25 +1638,34 @@ export function Timeline({
       (Number(segment.sourceStart) || 0) + (Number(segment.sourceDuration) || Number(segment.duration) || 0),
     );
     const sourceKey = segment.src;
-    filmstripUpgradeInFlightRef.current.add(sourceKey);
+    const controller = new AbortController();
+    inFlight.set(sourceKey, controller);
     extractVideoTrackFrames(segment.blob || sourceKey, {
       duration: sourceDuration,
       width: segment.width,
       height: segment.height,
       maxFrames: getVideoTrackSampleCount(sourceDuration),
       preferNativeSeek: Boolean(segment.remoteSrc),
+      signal: controller.signal,
     }).then((trackFrames) => {
-      if (!trackFrames.length) return;
+      if (controller.signal.aborted || !trackFrames.length) return;
       setVisualSegments((items) => items.map((item) => item.src === sourceKey
         ? { ...item, trackFrames, trackFrameDuration: sourceDuration, trackFrameSampling: "exact-pts-hq-v4" }
         : item));
     }).catch((error) => {
-      console.warn("High-density timeline frame extraction failed", error);
+      if (error?.name !== "AbortError") console.warn("High-density timeline frame extraction failed", error);
     }).finally(() => {
-      filmstripUpgradeInFlightRef.current.delete(sourceKey);
+      if (inFlight.get(sourceKey) === controller) {
+        inFlight.delete(sourceKey);
+      }
     });
-    return undefined;
-  }, [displayedVisualSegments, localTimelineZoom, setVisualSegments, visualType]);
+    return () => {
+      controller.abort();
+      if (inFlight.get(sourceKey) === controller) {
+        inFlight.delete(sourceKey);
+      }
+    };
+  }, [displayedVisualSegments, localTimelineZoom, setVisualSegments, timelineSeekActive, visualType]);
   useEffect(() => {
     if (playheadFrameCaptureRef.current) {
       window.cancelAnimationFrame(playheadFrameCaptureRef.current);
