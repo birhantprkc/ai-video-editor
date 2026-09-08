@@ -27,7 +27,10 @@ export function normalizeTimelineMarkers(value) {
     const baseId = markerText(item.id, 160).trim() || `timeline-marker-${index + 1}`;
     let id = baseId;
     let suffix = 2;
-    while (ids.has(id)) id = `${baseId}-${suffix++}`;
+    while (ids.has(id)) {
+      const tail = `-${suffix++}`;
+      id = `${baseId.slice(0, 160 - tail.length)}${tail}`;
+    }
     ids.add(id);
     const type = TIMELINE_MARKER_TYPES.includes(item.type) ? item.type : "marker";
     const time = Math.min(type === "range" ? MAX_TIMELINE_MARKER_SECONDS - 0.001 : MAX_TIMELINE_MARKER_SECONDS, markerTime(item.time));

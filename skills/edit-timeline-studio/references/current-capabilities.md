@@ -4,6 +4,7 @@
 
 - Editable main Visuals sequence plus timed picture-in-picture overlays
 - Captions, stickers, voiceover, separated source audio, and music tracks
+- Persistent markers, chapters, ranges, and notes; compact ruler flags by default, expandable titles/ranges, and UI snapping with Alt bypass
 - Visual transforms, property keyframes, masks, filters, effects, constant speed, and editable source-time speed curves with up to eight nodes and optional smooth joins
 - Keyframeable Color Wheels for shadows, midtones, highlights, and global offset, plus temperature, tint, and saturation controls
 - Person cutout for images and video, product/object cutout analysis, person and object outline styling, and local authorized face swap for a selected image or video target
@@ -18,13 +19,16 @@
 - Browser-driven operation of the running editor
 - Import and export through visible file controls
 - Pure timeline helper functions in `src/lib/`
-- Versioned `project.inspect`, `track.inspect`, `clip.inspect`, `transcript.inspect`, field-level `project.diff`, and `project.run` commands, with legacy `inspect`/`run` aliases
+- Versioned `project.inspect`, `track.inspect`, `clip.inspect`, `transcript.inspect`, `marker.inspect`, field-level `project.diff`, and `project.run` commands, with legacy `inspect`/`run` aliases
+- Revision-checked `marker.add`, `marker.update`, and `marker.delete` operations through the same CLI/MCP engine, full annotation inspection, marker counts by type, and semantic annotation diffs
 - A local STDIO MCP server inside this Skill that exposes the same inspect, diff, apply, and render command layer to Codex without duplicating reducers
 - Transactional, revision-checked, idempotent edits for probed and hashed visual/audio import to Visuals, Music, or multiple portable Voiceover clips; timed edits, captions, Visuals/Overlays, transitions, validated properties, track state, and ratio
 - Portable `.timeline` output that preserves archived media entries while replacing only versioned project metadata
 - Transactional local `project.render` for the portable Visuals + Voiceover + Music subset, with ffprobe verification and explicit rejection of unsupported composition features
 
 Browser-driven editing is a compatibility mechanism, not a stable public API. UI labels, selection state, drag thresholds, and file pickers make it unsuitable for unattended or idempotent jobs.
+
+For long-video anchors, chapter structure, beat cues, and revision notes, read [timeline-markers.md](timeline-markers.md). Marker-only edits work locally without browser automation or rendering. Annotations retain absolute project times, do not move automatically with ripple edits, and do not change rendered duration or produce visible overlays/container chapters. Beat detection and source-to-project cue mapping remain evidence-driven planning work rather than automatic marker-command capabilities.
 
 Color Wheels, speed curves, and the advanced subject-effect stack are currently editor/browser capabilities. The portable headless renderer explicitly rejects projects containing color grading, `speedCurve`, vision-derived masks, or other visual effects; do not claim headless render parity for them. Face-swap results are generated as new My assets and are not inserted into or substituted on the timeline automatically.
 

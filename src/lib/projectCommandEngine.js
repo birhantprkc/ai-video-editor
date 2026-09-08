@@ -1,3 +1,5 @@
+import { MAX_TIMELINE_MARKER_SECONDS, TIMELINE_MARKER_COLORS, TIMELINE_MARKER_TYPES, normalizeTimelineMarkers } from "./timelineMarkers.js";
+
 export const PROJECT_COMMAND_SCHEMA_VERSION = 1;
 
 const COMMAND_STATE_KEY = "commandState";
@@ -460,6 +462,105 @@ function setProjectRatio(project, operation) {
   project.ratioId = operation.ratio;
 }
 
+function requireMarkerId(value) {
+  if (typeof value !== "string" || !value.trim() || value !== value.trim() || value.length > 160) {
+    throw Object.assign(new Error("markerId must be a non-empty string of at most 160 characters without surrounding whitespace"), { code: "INVALID_ARGUMENT" });
+  }
+  return value;
+}
+
+function markerNumber(value, field) {
+  const result = finiteNonNegative(value, field);
+  if (result > MAX_TIMELINE_MARKER_SECONDS) {
+    throw Object.assign(new Error(`${field} must not exceed ${MAX_TIMELINE_MARKER_SECONDS} seconds`), { code: "INVALID_ARGUMENT" });
+  }
+  return result;
+}
+
+function markerString(value, field, maximumLength) {
+  if (typeof value !== "string" || value.length > maximumLength) {
+    throw Object.assign(new Error(`${field} must be a string of at most ${maximumLength} characters`), { code: "INVALID_ARGUMENT" });
+  }
+  return value;
+}
+
+function markerKind(value) {
+  if (!TIMELINE_MARKER_TYPES.includes(value)) {
+    throw Object.assign(new Error(`markerType must be one of ${TIMELINE_MARKER_TYPES.join(", ")}`), { code: "INVALID_ARGUMENT" });
+  }
+  return value;
+}
+
+function markerColor(value) {
+  if (!TIMELINE_MARKER_COLORS.includes(value)) {
+    throw Object.assign(new Error(`color must be one of ${TIMELINE_MARKER_COLORS.join(", ")}`), { code: "INVALID_ARGUMENT" });
+  }
+  return value;
+}
+
+function markerEntries(project) {
+  const raw = Array.isArray(project?.timelineMarkers) ? project.timelineMarkers : [];
+  const indices = raw.flatMap((item, index) => item && typeof item === "object" && !Array.isArray(item) ? [index] : []);
+  return normalizeTimelineMarkers(raw).map((marker, index) => ({ marker, index: indices[index] }));
+}
+
+function findMarkerEntry(project, markerId) {
+  const markers = Array.isArray(project.timelineMarkers) ? project.timelineMarkers : [];
+  const index = markers.findIndex((marker) => marker.id === markerId);
+  if (index < 0) throw Object.assign(new Error(`Marker not found: ${markerId}`), { code: "MARKER_NOT_FOUND" });
+  return { marker: markers[index], index };
+}
+
+function nextMarker(operation, markerId, previous = null) {
+  const has = (field) => Object.hasOwn(operation, field);
+  const type = has("markerType") ? markerKind(operation.markerType) : previous?.type || "marker";
+  const time = has("time") ? markerNumber(operation.time, "time") : previous ? previous.time : markerNumber(undefined, "time");
+  const marker = {
+    id: markerId,
+    type,
+    time,
+    title: has("title") ? markerString(operation.title, "title", 240) : previous?.title || "",
+    notes: has("notes") ? markerString(operation.notes, "notes", 20000) : previous?.notes || "",
+    color: has("color") ? markerColor(operation.color) : previous?.color || "cyan",
+  };
+  if (type === "range") {
+    const endTime = has("endTime") ? markerNumber(operation.endTime, "endTime")
+      : previous?.type === "range" ? markerNumber(has("time") ? time + Math.max(0.001, previous.endTime - previous.time) : previous.endTime, "endTime")
+        : markerNumber(undefined, "endTime");
+    const timeTolerance = Number.EPSILON * Math.max(1, time, endTime) * 4;
+    if (endTime <= time || endTime - time < 0.001 - timeTolerance) {
+      throw Object.assign(new Error("A range marker must span at least 0.001 seconds"), { code: "INVALID_RANGE" });
+    }
+    marker.endTime = endTime;
+  } else if (has("endTime")) {
+    throw Object.assign(new Error("endTime is supported only for range markers"), { code: "INVALID_ARGUMENT" });
+  }
+  return marker;
+}
+
+function addMarker(project, operation) {
+  const markerId = requireMarkerId(operation.markerId);
+  if ((project.timelineMarkers || []).some((marker) => marker.id === markerId)) {
+    throw Object.assign(new Error(`Marker already exists: ${markerId}`), { code: "MARKER_ALREADY_EXISTS" });
+  }
+  const marker = nextMarker(operation, markerId);
+  project.timelineMarkers = [...(Array.isArray(project.timelineMarkers) ? project.timelineMarkers : []), marker];
+}
+
+function updateMarker(project, operation) {
+  const markerId = requireMarkerId(operation.markerId);
+  const { marker, index } = findMarkerEntry(project, markerId);
+  const updated = { ...project.timelineMarkers[index], ...nextMarker(operation, markerId, marker) };
+  if (updated.type !== "range") delete updated.endTime;
+  project.timelineMarkers[index] = updated;
+}
+
+function deleteMarker(project, operation) {
+  const markerId = requireMarkerId(operation.markerId);
+  const { index } = findMarkerEntry(project, markerId);
+  project.timelineMarkers.splice(index, 1);
+}
+
 const reducers = {
   "asset.import": importAsset,
   "timed.move": moveTimed,
@@ -475,6 +576,9 @@ const reducers = {
   "caption.update": updateCaption,
   "caption.unlink_audio": unlinkCaption,
   "caption.link_audio": linkCaption,
+  "marker.add": addMarker,
+  "marker.update": updateMarker,
+  "marker.delete": deleteMarker,
   "clip.delete": deleteClip,
   "clip.set_property": setClipProperty,
   "clip.set_speed": setClipSpeed,
@@ -507,6 +611,7 @@ export function inspectProject(project) {
   const stickers = Array.isArray(project?.stickerSegments) ? project.stickerSegments : [];
   const overlays = Array.isArray(project?.visualOverlaySegments) ? project.visualOverlaySegments : [];
   const music = Array.isArray(project?.musicSegments) ? project.musicSegments : [];
+  const markers = normalizeTimelineMarkers(project?.timelineMarkers);
   const visualDuration = visuals.reduce((total, item) => total + Math.max(0, Number(item.duration) || 0), 0);
   const duration = [visualDuration, ...captions.map((item) => Number(item.end) || 0), ...audio.map((item) => (Number(item.start) || 0) + (Number(item.duration) || 0)),
     ...stickers.map((item) => (Number(item.start) || 0) + (Number(item.duration) || 0)),
@@ -519,6 +624,7 @@ export function inspectProject(project) {
     duration,
     ratio: project?.ratioId || "16:9",
     tracks: { captions: captions.length, audio: audio.length, visuals: visuals.length, stickers: stickers.length, overlays: overlays.length, music: music.length },
+    markers: { count: markers.length, byType: Object.fromEntries(TIMELINE_MARKER_TYPES.map((type) => [type, markers.filter((marker) => marker.type === type).length])) },
     appliedOperationIds: state.appliedOperationIds,
     warnings: audio.length ? [] : ["Project has no serialized voiceover clips"],
   };
@@ -629,6 +735,18 @@ export function inspectTranscript(project, audioClipId = "") {
   };
 }
 
+export function inspectMarkers(project, markerId = "") {
+  const entries = markerEntries(project).sort((left, right) => left.marker.time - right.marker.time || left.index - right.index);
+  const markers = entries.filter(({ marker }) => markerId === "" || marker.id === markerId).map(({ marker }) => marker);
+  if (markerId !== "" && !markers.length) throw Object.assign(new Error(`Marker not found: ${markerId}`), { code: "MARKER_NOT_FOUND" });
+  return {
+    schemaVersion: PROJECT_COMMAND_SCHEMA_VERSION,
+    revision: commandState(project).revision,
+    markerCount: markers.length,
+    markers,
+  };
+}
+
 function sameValue(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -655,7 +773,22 @@ export function diffProjects(beforeProject, afterProject) {
     if (!added.length && !removed.length && !modified.length && sameValue(orderBefore, orderAfter)) return [];
     return [[track, { added, removed, modified, ...(sameValue(orderBefore, orderAfter) ? {} : { orderBefore, orderAfter }) }]];
   }));
-  return { projectFields, tracks };
+  const beforeMarkers = inspectMarkers(beforeProject).markers;
+  const afterMarkers = inspectMarkers(afterProject).markers;
+  const beforeMarkersById = new Map(beforeMarkers.map((marker) => [marker.id, marker]));
+  const afterMarkersById = new Map(afterMarkers.map((marker) => [marker.id, marker]));
+  const markers = {
+    added: afterMarkers.filter((marker) => !beforeMarkersById.has(marker.id)),
+    removed: beforeMarkers.filter((marker) => !afterMarkersById.has(marker.id)),
+    modified: afterMarkers.flatMap((marker) => {
+      const previous = beforeMarkersById.get(marker.id);
+      if (!previous || sameValue(previous, marker)) return [];
+      const fields = [...new Set([...Object.keys(previous), ...Object.keys(marker)])]
+        .filter((field) => !sameValue(previous[field], marker[field]));
+      return [{ id: marker.id, fields, before: previous, after: marker }];
+    }),
+  };
+  return { projectFields, tracks, ...(markers.added.length || markers.removed.length || markers.modified.length ? { markers } : {}) };
 }
 
 export function applyCommandPlan(project, plan) {
@@ -682,6 +815,11 @@ export function applyCommandPlan(project, plan) {
   const appliedOperationIds = [];
   let operationId = "";
   try {
+    // Resolve imported/missing/duplicate IDs once before any marker mutations.
+    // Deleting an earlier entry must not reassign a later annotation's identity.
+    if (plan.operations.some((operation) => !alreadyApplied.has(operation.id) && operation.type.startsWith("marker."))) {
+      next.timelineMarkers = normalizeTimelineMarkers(next.timelineMarkers);
+    }
     for (const operation of plan.operations) {
       if (alreadyApplied.has(operation.id)) continue;
       operationId = operation.id;
