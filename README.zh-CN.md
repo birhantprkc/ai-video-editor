@@ -22,11 +22,11 @@
 
 ## 项目动态
 
+- **2026 年 9 月 10 日 — WebMCP 实时编辑协作：** 支持的浏览器可将当前工程作为结构化工具提供给 Agent，读取轨道与片段、定位预览，并先查看画面重排与裁剪方案再应用。浏览器适配层复用共享命令引擎，应用前检查工程是否已被修改，保留编辑器撤销能力；同时补齐 Agent 发现入口与接入文档，根地址仍直接进入编辑器。
 - **2026 年 9 月 8 日 — 播放头拖动更流畅：** 每个显示帧合并一次指针更新，视频完成当前定位后再追赶最新目标，并复用时间线采样缓存。拖动全程暂停后台缩略图细化，松手后精确定位到最终位置，保持原有交互。
 - **2026 年 9 月 8 日 — Agent 时间线标记能力：** Agent 可通过 Skill、CLI 和 MCP 读取、新增、更新和删除时间线标记，用于章节规划、音乐节拍和修改意见；应用更改前先检查项目并预览语义差异。
 - **2026 年 9 月 7 日 — 时间线标记：** 新增标记、章节、区间和备注，方便整理长视频、标记音乐节拍和记录修改意见。可编辑标题、备注、时间与颜色，搜索并跳转标记，按 M 在播放头处快速添加。标记固定在项目时间位置，随可移植 `.timeline` 项目保存，支持撤销／重做，并完成全部 13 种界面语言本地化。
 - **2026 年 9 月 3 日 — 意大利语与印度尼西亚语界面：** Timeline Studio 现支持 13 种界面语言。两种新语言已补齐完整编辑器词典与运行时提示，并人工校订字幕、时间线工具、智能构图、AI 音乐、矢量设计和生成插件术语，同时支持对应字体与 Whisper 自动字幕识别。
-- **2026 年 9 月 1 日 — 同步安全的视频快速就绪：** 本地与在线导入现在只等待一组按设备性能控制、携带真实 PTS 的种子帧，不再阻塞于 120–240 张缩略图，因此不会拉伸单张首帧，也能更快开放编辑。随后精确帧优先完善当前视口，再按中点分治顺序覆盖视口外单元；缩略图始终选择目标源时间之前的最后一帧，播放头使用实时预览帧，批量后台提交会在拖动期间暂停。
 
 在公开 [Roadmap](ROADMAP.md) 查看计划与 TODO，在 [Releases](https://github.com/MartinDelophy/ai-video-editor/releases) 查看已发布功能，在 [Issues](https://github.com/MartinDelophy/ai-video-editor/issues) 跟踪具体任务和缺陷。
 
@@ -109,7 +109,7 @@ https://github.com/user-attachments/assets/304a744e-d620-4380-9c17-19af3726f5a4
 - 验证轨道位置、转场、字幕、画中画、实际可听音频和最终导出文件；
 - 始终保留可编辑的 `.timeline` 项目，而不是只交付不可逆的视频成片。
 
-当前 Skill 会明确说明能力边界：现阶段已经可以通过浏览器驱动编辑；Skill 中的版本化无头命令协议是下一阶段自动化层，不会把尚未实现的 CLI 描述成现成功能。
+当前 Skill 可通过版本化 CLI 与本地 STDIO MCP 读取工程、预览语义差异并以事务方式写入新的 `.timeline` 文件；无头渲染支持已明确列出的画面、配音与音乐子集。浏览器 WebMCP 可操作正在打开的工程，先审阅再应用基础画面编辑；更丰富的合成与 AI 生成仍使用编辑器。详见 [WebMCP 接入说明](docs/webmcp.md)。
 
 通过公开的 [skills.sh](https://skills.sh/MartinDelophy/ai-video-editor) 目录安装（当前 CLI 要求 Node.js 22.20.0 或更高版本）：
 
@@ -127,7 +127,7 @@ gh skill install MartinDelophy/ai-video-editor edit-timeline-studio --agent clau
 gh skill install MartinDelophy/ai-video-editor edit-timeline-studio --agent codex --scope user
 ```
 
-如需安装已经验证过的固定版本，而不是跟随最新 Release，请在命令末尾添加 `--pin v1.0.7`。安装前可以先预览 Skill：
+如需安装已经验证过的固定版本，而不是跟随最新 Release，请在命令末尾添加 `--pin v1.0.8`。安装前可以先预览 Skill：
 
 ```bash
 gh skill preview MartinDelophy/ai-video-editor edit-timeline-studio
@@ -136,7 +136,7 @@ gh skill preview MartinDelophy/ai-video-editor edit-timeline-studio
 ## 路线图
 
 - **当前：** 加固确定性离线导出并提高时间线编辑可靠性。
-- **下一步：** 发布供 Agent 驱动剪辑使用的版本化无头命令执行器，并让可复用项目模板更易分享。
+- **下一步：** 扩展无头渲染与浏览器导出的能力一致性，增加可审阅的 WebMCP 编辑命令，并让可复用工程模板更易分享。
 - **未来：** 增加协作审阅流程、插件扩展能力，以及更多经过本地验证的 AI 模型。
 
 路线图优先级会在 [GitHub Discussions](https://github.com/MartinDelophy/ai-video-editor/discussions) 中共同讨论。欢迎提交功能建议和真实工作流反馈。

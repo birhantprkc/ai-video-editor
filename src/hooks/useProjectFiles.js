@@ -32,21 +32,23 @@ export function useProjectFiles(deps) {
     };
   }, [deps]);
 
+  const createCurrentArchive = useCallback(() => createProjectArchive({
+    project: getProjectSnapshot(), visualSegments: [...deps.visualSegments, ...deps.visualOverlaySegments],
+    audioSegments: deps.audioSegments,
+    audio: deps.audioBlob ? { blob: deps.audioBlob, name: "ai-voiceover" } : null,
+    sourceAudio: deps.sourceAudioBlob ? { blob: deps.sourceAudioBlob, name: deps.sourceAudioName || "source-audio" } : null,
+    music: deps.musicBlob ? { blob: deps.musicBlob, name: deps.musicName || "background-music" } : null,
+  }), [deps, getProjectSnapshot]);
+
   const handleExportProject = useCallback(async () => {
     deps.setShowFileMenu(false);
     try {
       deps.notify("正在打包工程与媒体素材…");
-      const archive = await createProjectArchive({
-        project: getProjectSnapshot(), visualSegments: [...deps.visualSegments, ...deps.visualOverlaySegments],
-        audioSegments: deps.audioSegments,
-        audio: deps.audioBlob ? { blob: deps.audioBlob, name: "ai-voiceover" } : null,
-        sourceAudio: deps.sourceAudioBlob ? { blob: deps.sourceAudioBlob, name: deps.sourceAudioName || "source-audio" } : null,
-        music: deps.musicBlob ? { blob: deps.musicBlob, name: deps.musicName || "background-music" } : null,
-      });
+      const archive = await createCurrentArchive();
       downloadBlob(archive, "AI-配音项目.timeline");
       deps.notify("工程包已导出（含媒体素材）");
     } catch (error) { deps.notify(error instanceof Error ? `工程导出失败：${error.message}` : "工程导出失败"); }
-  }, [deps, getProjectSnapshot]);
+  }, [deps, createCurrentArchive]);
 
   const handleNewProject = useCallback(() => {
     if (!window.confirm("新建工程将清空当前时间线，是否继续？")) return;
@@ -157,5 +159,5 @@ export function useProjectFiles(deps) {
     if (deps.projectFileInputRef.current) deps.projectFileInputRef.current.value = "";
   }, [deps]);
 
-  return { handleExportProject, handleImportProject, handleNewProject };
+  return { handleExportProject, handleImportProject, handleNewProject, getProjectSnapshot, createCurrentArchive };
 }

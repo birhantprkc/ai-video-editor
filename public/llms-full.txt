@@ -1,6 +1,6 @@
 # Timeline Studio — Full Product Reference
 
-Last verified: 2026-09-02
+Last verified: 2026-09-10
 Canonical URL: https://video-editor.ai-creator.top/
 GitHub: https://github.com/MartinDelophy/ai-video-editor
 License: MIT
@@ -94,7 +94,22 @@ Timeline Studio is a free, open-source, local-first AI video editor that runs in
 
 ## Supported interface languages
 
-Chinese, English, Japanese, Korean, Spanish, French, German, Portuguese, Thai, Vietnamese and Russian.
+Chinese, English, Japanese, Korean, Spanish, French, German, Portuguese, Thai, Vietnamese, Russian, Italian and Indonesian.
+
+## Agent integration
+
+- Native WebMCP is a progressive enhancement for compatible browsers and agent hosts. The normal editor remains usable without it.
+- Agents can inspect the open project, tracks, clips and serialized captions; seek the preview; review and apply supported main-visual reorder/basic source trim plans; undo the latest unchanged agent edit; and download a new portable .timeline copy.
+- Edit plans use an opaque live-state token, a complete clip order and optional absolute source trim ranges. Apply requires the returned preview ID and rejects intervening project changes.
+- Eligible trimming is limited to plain 1× videos within their existing source range. Advanced timing, transitions, keyframes and effects remain editor operations.
+- Changes reuse the shared command engine, existing ripple behavior, track locks and editor history. Project saving is a browser download, not video rendering or media upload.
+- The separate repository Skill, CLI and local STDIO MCP operate on project files. The website does not host a remote MCP or OAuth server.
+- Tool results can include project metadata and caption text, which the browser agent receives under its own data-handling terms. Media bytes are not returned by inspection tools.
+- Browser guide: https://video-editor.ai-creator.top/agent-guide.md
+- Agent Skills index: https://video-editor.ai-creator.top/.well-known/agent-skills/index.json
+- Browser Skill: https://video-editor.ai-creator.top/.well-known/agent-skills/edit-timeline-studio-browser/SKILL.md
+- Full local Skill: https://github.com/MartinDelophy/ai-video-editor/tree/main/skills/edit-timeline-studio
+- Integration reference: https://github.com/MartinDelophy/ai-video-editor/blob/main/docs/webmcp.md
 
 ## Technology
 

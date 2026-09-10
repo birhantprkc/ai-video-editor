@@ -16,6 +16,7 @@
 ## Available to an Agent today
 
 - Repository inspection and code changes
+- Native browser WebMCP tools for the open project: structured reads, preview seeking, reviewed main-visual reorder and eligible 1× source trims, guarded undo, and a new `.timeline` browser download
 - Browser-driven operation of the running editor
 - Import and export through visible file controls
 - Pure timeline helper functions in `src/lib/`
@@ -26,7 +27,7 @@
 - Portable `.timeline` output that preserves archived media entries while replacing only versioned project metadata
 - Transactional local `project.render` for the portable Visuals + Voiceover + Music subset, with ffprobe verification and explicit rejection of unsupported composition features
 
-Browser-driven editing is a compatibility mechanism, not a stable public API. UI labels, selection state, drag thresholds, and file pickers make it unsuitable for unattended or idempotent jobs.
+Native browser WebMCP is an experimental structured interface for the documented live-editor subset; availability depends on the browser and agent host. UI automation remains a compatibility mechanism whose labels, selection state, drag thresholds and file pickers are unsuitable for unattended or idempotent jobs. The local STDIO MCP/CLI path remains the default for project files.
 
 For long-video anchors, chapter structure, beat cues, and revision notes, read [timeline-markers.md](timeline-markers.md). Marker-only edits work locally without browser automation or rendering. Annotations retain absolute project times, do not move automatically with ripple edits, and do not change rendered duration or produce visible overlays/container chapters. Beat detection and source-to-project cue mapping remain evidence-driven planning work rather than automatic marker-command capabilities.
 
@@ -64,4 +65,4 @@ Observed browser-path constraints:
 2. Add persisted undo checkpoints around the existing command transaction.
 3. Expand `project.render` with captions, stickers, overlays, transitions, effects, source audio, progress events, and cancellation diagnostics.
 4. Add structured progress and cancellation to the MCP and CLI paths for long-running analysis and rendering.
-5. Prefer MCP, then the CLI, when an operation is supported, retaining browser control as the compatibility path.
+5. Prefer local STDIO MCP, then the CLI, for project files; use browser WebMCP for supported edits to the open project, retaining UI control as the compatibility path.

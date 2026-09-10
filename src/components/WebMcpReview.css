@@ -1,0 +1,45 @@
+.webmcp-review {
+  position: fixed;
+  z-index: 85;
+  top: 64px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  width: min(380px, calc(100vw - 32px));
+  max-height: min(540px, calc(100dvh - 140px));
+  overflow: hidden;
+  border: 1px solid rgba(104, 217, 229, .28);
+  border-radius: 14px;
+  background: #181e24;
+  color: #e8eff2;
+  box-shadow: 0 12px 44px #0006;
+  font-size: 12px;
+}
+.webmcp-review header { display: flex; align-items: center; gap: 9px; padding: 11px 12px 11px 16px; border-bottom: 1px solid #ffffff0f; color: #78dce7; }
+.webmcp-review header strong { flex: 1; min-width: 0; font-size: 13px; }
+.webmcp-review-close { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: #a7b4bd; cursor: pointer; }
+.webmcp-review-close:hover { background: #ffffff0b; color: #fff; }
+.webmcp-review button:focus-visible { outline: 2px solid #78dce7; outline-offset: 2px; }
+.webmcp-review-body { overflow: auto; min-height: 0; padding: 14px 16px; overscroll-behavior: contain; touch-action: pan-y; }
+.webmcp-review p { margin: 0 0 12px; line-height: 1.6; }
+.webmcp-review-status { color: #acbac3; }
+.webmcp-review-success { display: flex; align-items: center; gap: 6px; color: #80dfbd; }
+.webmcp-review-summary { color: #dce5ea; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 100px; overflow: auto; }
+.webmcp-review-duration { margin: 4px 0 10px; font-variant-numeric: tabular-nums; }
+.webmcp-review-clips { margin: 0; padding: 0; list-style: none; }
+.webmcp-review-clips li { display: flex; flex-direction: column; gap: 5px; padding: 10px 0; border-top: 1px solid #ffffff0a; }
+.webmcp-review-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.webmcp-review-detail { display: flex; flex-wrap: wrap; gap: 5px 16px; font-size: 11px; color: #8ea3b2; font-variant-numeric: tabular-nums; }
+.webmcp-review-linked { margin: 10px 0 0; padding: 10px 0 0; list-style: none; border-top: 1px solid #ffffff14; color: #acbac3; }
+.webmcp-review-linked li { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; font-variant-numeric: tabular-nums; }
+.webmcp-review .webmcp-review-error { color: #ffbe97; margin: 10px 0 0; }
+.webmcp-review footer { display: flex; justify-content: flex-end; gap: 8px; padding: 11px 14px; border-top: 1px solid #ffffff0f; }
+.webmcp-review footer button { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; padding: 7px 12px; font-size: 12px; cursor: pointer; }
+.webmcp-review button:disabled { opacity: .45; cursor: not-allowed; }
+.webmcp-review-spinner { animation: webmcp-spin 1s linear infinite; }
+@keyframes webmcp-spin { to { transform: rotate(360deg); } }
+@media (max-width: 760px) {
+  .webmcp-review { top: 62px; right: 10px; width: calc(100vw - 20px); max-height: min(420px, calc(100dvh - 170px)); }
+  .webmcp-review footer button { min-height: 40px; }
+}
+@media (prefers-reduced-motion: reduce) { .webmcp-review-spinner { animation: none; } }

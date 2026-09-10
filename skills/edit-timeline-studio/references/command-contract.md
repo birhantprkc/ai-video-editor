@@ -82,4 +82,4 @@ On failure, return `ok: false`, a stable error `code`, a human-readable `message
 
 ## Architectural rule
 
-Do not implement CLI and MCP editing separately. The bundled MCP server must remain a thin transport over the CLI's single command registry, pure project-state reducers, and shared validation. The React UI should eventually dispatch those same commands so manual and Agent edits cannot diverge.
+Do not implement CLI and MCP editing separately. The bundled MCP server must remain a thin transport over the CLI's single command registry, pure project-state reducers, and shared validation. The browser WebMCP reorder/trim adapter now compiles its reviewed plans into this same engine, integrates the editor’s ripple helpers, and commits through normal history. Expand shared coverage instead of copying reducers into another transport.

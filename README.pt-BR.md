@@ -19,11 +19,11 @@ O usuário é o único responsável por quaisquer consequências legais decorren
 
 ## Novidades do projeto
 
+- **10 de setembro de 2026 — WebMCP no editor aberto:** navegadores compatíveis permitem que agentes consultem o projeto com ferramentas estruturadas, posicionem a prévia e revisem planos de reordenação e corte antes de aplicá-los. O adaptador reutiliza o mecanismo de comandos compartilhado, detecta alterações simultâneas e preserva Desfazer. Inclui recursos de descoberta e documentação; a URL raiz continua abrindo diretamente o editor.
 - **8 de setembro de 2026 — Arraste mais fluido do cursor de reprodução:** as atualizações do ponteiro são agrupadas por quadro de tela, cada busca de vídeo em andamento termina antes de avançar ao último tempo solicitado e a amostragem da linha do tempo é reutilizada. O refinamento das miniaturas pausa durante todo o arraste; ao soltar, a posição final exata é alcançada com os mesmos controles.
 - **8 de setembro de 2026 — Marcadores para agentes:** os agentes podem ler, adicionar, atualizar e excluir marcadores por Skill, CLI e MCP para planejar capítulos e batidas musicais ou registrar comentários de revisão, com inspeção do projeto e prévia das diferenças semânticas antes de aplicar as alterações.
 - **7 de setembro de 2026 — Marcadores da linha do tempo:** adicione marcadores, capítulos, intervalos e notas para organizar edições longas, marcar batidas musicais e registrar comentários de revisão. Edite títulos, notas, tempos e cores, busque e navegue entre marcadores e use M para marcar a posição do cursor. Os marcadores mantêm sua posição temporal, são salvos em projetos portáteis `.timeline` e permitem desfazer/refazer nos 13 idiomas da interface.
 - **3 de setembro de 2026 — Interfaces em italiano e indonésio:** o Timeline Studio agora oferece 13 idiomas de interface. Ambos incluem dicionários completos do editor e mensagens de execução, terminologia revisada para legendas, linha do tempo, Smart Frame, Música por IA, design vetorial e plugins de geração, além de fontes e reconhecimento Whisper compatíveis.
-- **1º de setembro de 2026 — Vídeo pronto mais cedo sem perder sincronização:** importações locais e online aguardam apenas um pequeno conjunto de quadros-semente com PTS real, adaptado ao dispositivo, em vez de bloquear em 120–240 miniaturas. Depois, quadros exatos refinam primeiro a área visível e continuam fora da tela por subdivisão de pontos médios. Cada miniatura usa o último quadro anterior ao tempo de origem solicitado, o cursor acompanha a prévia ao vivo e as atualizações em segundo plano pausam durante a busca.
 
 Consulte o [Roadmap](ROADMAP.md) para o trabalho planejado, [Releases](https://github.com/MartinDelophy/ai-video-editor/releases) para mudanças publicadas e [Issues](https://github.com/MartinDelophy/ai-video-editor/issues) para tarefas e erros.
 
@@ -77,12 +77,12 @@ gh skill install MartinDelophy/ai-video-editor edit-timeline-studio --agent clau
 gh skill install MartinDelophy/ai-video-editor edit-timeline-studio --agent codex --scope user
 ```
 
-Adicione `--pin v1.0.7` para instalar a versão verificada em vez de acompanhar a release mais recente. Antes de instalar, você pode conferir o conteúdo com `gh skill preview MartinDelophy/ai-video-editor edit-timeline-studio`.
+Adicione `--pin v1.0.8` para instalar a versão verificada em vez de acompanhar a release mais recente. Antes de instalar, você pode conferir o conteúdo com `gh skill preview MartinDelophy/ai-video-editor edit-timeline-studio`.
 
 ## Roteiro
 
 - **Agora:** fortalecer a exportação offline determinística, melhorar a confiabilidade da linha do tempo e ampliar os testes de ponta a ponta no navegador.
-- **Em seguida:** lançar o executor de comandos headless versionado para edição por agentes e facilitar o compartilhamento de modelos de projeto reutilizáveis.
+- **Em seguida:** ampliar a paridade da renderização headless, os comandos WebMCP que podem ser revisados e o compartilhamento de modelos de projeto.
 - **Mais adiante:** adicionar revisão colaborativa, uma interface de extensões e mais modelos de IA verificados localmente.
 
 As prioridades são definidas em [GitHub Discussions](https://github.com/MartinDelophy/ai-video-editor/discussions).

@@ -12,6 +12,7 @@ import { FirstVisualGuide } from "./components/FirstVisualGuide.jsx";
 import { MiganRepairDialog } from "./components/MiganRepairDialog.jsx";
 import { NanoVsrRestorationDialog } from "./components/NanoVsrRestorationDialog.jsx";
 import { SmartDenoiseDialog } from "./components/SmartDenoiseDialog.jsx";
+import { WebMcpReview } from "./components/WebMcpReview.jsx";
 import {
   canShowFirstVisualGuide,
   FIRST_VISUAL_GUIDE_MOBILE_QUERY,
@@ -34,6 +35,8 @@ import { useVoiceGeneration } from "./hooks/useVoiceGeneration.js";
 import { useVoiceProfiles } from "./hooks/useVoiceProfiles.js";
 import { useAutoCaptions } from "./hooks/useAutoCaptions.js";
 import { useAutoEdit } from "./hooks/useAutoEdit.js";
+import { useWebMcpEditor } from "./hooks/useWebMcpEditor.js";
+import { browserProjectFingerprint, restoreBrowserSegmentMedia } from "./lib/browserEditPlan.js";
 import { useSourceAudioExtraction } from "./hooks/useSourceAudioExtraction.js";
 import { useVocalSeparation } from "./hooks/useVocalSeparation.js";
 import { useAvatarGeneration } from "./hooks/useAvatarGeneration.js";
@@ -241,7 +244,8 @@ export function App() {
     setSelectedLibraryAssetId,
     setUserAssets,
   });
-  const { redo, undo } = useEditorHistory({
+  const { redo, undo, checkpoint: checkpointHistory, signature: historySignature } = useEditorHistory({
+    autoRatioSourceKeyRef,
     timelineMarkers, setTimelineMarkers,
     audioSegments, captionPlacement, captionPosition, captionSegments, captionSize,
     captionStyle, captionsEnabled, currentTime, fitMode, imageClipCount, imageDuration,
@@ -1237,16 +1241,16 @@ export function App() {
     return { ...overlay, depthAnalysis: resolveDepthAnalysisAtTime(depthRecord, sourceTime) };
   }), [currentTime, depthRecords, previewVisualOverlays]);
 
-  const { handleExportProject, handleImportProject, handleNewProject } = useProjectFiles({
+  const { getProjectSnapshot, createCurrentArchive, handleExportProject, handleImportProject, handleNewProject } = useProjectFiles({
     timelineMarkers, setTimelineMarkers,
     audioBlob, audioDuration, audioSegments, captionPlacement, captionPosition, captionSegments, captionSize,
     captionStyle, captionsEnabled, captionStyleFallback: captionStyle, clearAllVisionState,
     clearAudioTrack, clearImageTrack, clearMusicTrack, clearSourceAudioTrack, fitMode,
-    imageUrlRefs, musicBlob, musicDuration, musicName, musicStart, musicVolume, notify, projectFileInputRef,
+    imageUrlRefs, musicBlob, musicDuration, musicName, musicSegments, musicStart, musicVolume, notify, projectFileInputRef,
     ratioId, replaceAudio, replaceMusic, replaceSourceAudio, script, selectedFilterId,
     selectedStickerId, selectedTransitionId, selectedVoiceId, setCaptionPlacement,
     setCaptionPosition, setCaptionSegments, setCaptionSize, setCaptionStyle, setCaptionsEnabled,
-    setAudioSegments, setCurrentTime, setFitMode, setImageClipCount, setImageDuration, setMusicStart, setMusicVolume, setSelectedAudioSegmentId,
+    setAudioSegments, setCurrentTime, setFitMode, setImageClipCount, setImageDuration, setMusicSegments, setMusicStart, setMusicVolume, setSelectedAudioSegmentId,
     setRatioId, setScript, setSelectedFilterId, setSelectedSegmentId, setSelectedStickerId,
     setSelectedStickerSegmentId, setSelectedTransitionId, setSelectedVoiceId, setShowFileMenu,
     setSourceAudioAssetId, setSourceAudioLinked, setSourceAudioVolume, setSourceAudioSpatialEffect, setSourceAudioSpatialAmount, setSpeed, setStickerSegments, setTimelineZoom, setTrackLocks, setTrackVisibility,
@@ -1307,6 +1311,48 @@ export function App() {
     setTimelineHorizon,
     stickerSegments, sourceAudioDuration, sourceAudioStart, musicDuration, musicStart, musicSegments, currentTime, setSnapGuide,
     visualOverlaySegments, setVisualOverlaySegments, setSelectedVisualOverlayId, trackScrollRef,
+  });
+
+  // Browser agents use the live editor action and normal undo history.
+  const applyBrowserReview = (review, message) => {
+    if (!review.hasChanges) throw Object.assign(new Error(), { code: "NO_CHANGES" });
+    if (review.fingerprint !== browserProjectFingerprint(getProjectSnapshot(), rippleEditing, visualSegments)) {
+      throw Object.assign(new Error(), { code: "BROWSER_EDIT_STALE_PLAN" });
+    }
+    const firstChanged = review.rows.find((row) => row.changed);
+    const next = review.project;
+    const nextVisuals = restoreBrowserSegmentMedia(next.visualSegments, visualSegments);
+    const nextAudio = restoreBrowserSegmentMedia(next.audioSegments, audioSegments);
+    const nextOverlays = restoreBrowserSegmentMedia(next.visualOverlaySegments, visualOverlaySegments);
+    checkpointHistory();
+    // Reordering existing media keeps the reviewed canvas ratio. Auto-detection
+    // remains available when the user uploads a new first source later.
+    const ratioSource = nextVisuals.find((clip) => clip.width > 0 && clip.height > 0);
+    if (ratioSource) autoRatioSourceKeyRef.current = `${ratioSource.assetId || ratioSource.id}:${ratioSource.width}x${ratioSource.height}`;
+    pauseTimelineMedia();
+    setIsPlaying(false);
+    setAudioSegments(nextAudio);
+    setCaptionSegments(next.captionSegments);
+    setVisualOverlaySegments(nextOverlays);
+    setStickerSegments(next.stickerSegments);
+    setMusicSegments(next.musicSegments);
+    setMusicStart(next.musicStart);
+    setSourceAudioStart(next.sourceAudioStart);
+    commitVisualSegments(nextVisuals, message, firstChanged?.index ?? 0);
+    currentTimeRef.current = firstChanged?.start ?? 0;
+    setCurrentTime(firstChanged?.start ?? 0);
+  };
+  const webMcp = useWebMcpEditor({
+    language: activeLanguage, visualSegments, visualOverlaySegments, audioSegments,
+    sourceAudioBlob, musicBlob, audioBlob, rippleEditing, getProjectSnapshot,
+    currentTime, duration: exportContentDuration, historySignature,
+    createArchive: createCurrentArchive, download: downloadBlob, notify,
+    applyReview: applyBrowserReview,
+    undo: () => { pauseTimelineMedia(); undo(); },
+    seek: (time) => { pauseTimelineMedia(); setIsPlaying(false); seekTo(time, { immediate: true }); },
+    isBusy: () => Boolean(exporting || timelineClipDragRef.current || pointerAssetDragRef.current ||
+      isDragging || draggedAssetId || visualSegments.some((clip) => clip.preparing) ||
+      visualOverlaySegments.some((clip) => clip.preparing) || visionJob.running || avatarJob.running || autoEdit.job.running),
   });
 
   return (
@@ -1383,6 +1429,7 @@ export function App() {
         projectFileInputRef={projectFileInputRef}
       />
 
+      <WebMcpReview agent={webMcp} language={activeLanguage} />
       <section className={`editor-grid ${compactRail ? "is-compact-rail" : ""}`}>
         <EditorSidebar model={{
           activeLanguage, activeTool, analyzeCurrentVisual, analyzeEffectVisual, audioBlob, audioDuration,

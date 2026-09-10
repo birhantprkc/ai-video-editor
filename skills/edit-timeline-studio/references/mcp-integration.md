@@ -2,6 +2,8 @@
 
 The bundled MCP server is a local STDIO transport over Timeline Studio's existing Agent command runner. It does not implement timeline edits separately and does not require an OpenAI API key.
 
+For a project already open in the browser, use [webmcp-integration.md](webmcp-integration.md) instead. Browser tools operate on live state tokens and preview IDs; the local tools below operate on filesystem paths and revisioned plans.
+
 ## Availability
 
 The server requires a Timeline Studio repository checkout with installed Node dependencies and `scripts/timeline-command.mjs`. Launch the adapter inside that checkout so its MCP SDK imports resolve through the checkout's dependencies. It locates the command-layer repository from `TIMELINE_STUDIO_ROOT`, the process working directory, or its source location. Setting `TIMELINE_STUDIO_ROOT` alone does not make the MCP SDK resolvable when directly launching a copied adapter from a standalone installed Skill directory.

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
+  "skills": [
+    {
+      "name": "edit-timeline-studio-browser",
+      "type": "skill-md",
+      "description": "Inspect, preview, and apply supported timeline edits in the user's open Timeline Studio browser editor using its registered WebMCP page tools. Use for live project inspection, main-visual reordering, basic source trimming, playhead seeking, undoing an agent edit, and saving a project copy.",
+      "url": "/.well-known/agent-skills/edit-timeline-studio-browser/SKILL.md",
+      "digest": "sha256:f3a2d3fbc25c2b3f55c22d9835e47602b56ab97f66dd8921c089f3a3b20fb3bc"
+    }
+  ]
+}

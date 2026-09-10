@@ -701,7 +701,7 @@ export function inspectClip(project, clipId) {
 
 export function inspectTranscript(project, audioClipId = "") {
   const captions = (Array.isArray(project?.captionSegments) ? project.captionSegments : [])
-    .filter((caption) => !audioClipId || caption.audioSegmentId === audioClipId)
+    .filter((caption) => !audioClipId || (caption.audioSegmentId || caption.detachedAudioSegmentId) === audioClipId)
     .map((caption, index) => {
       const start = Math.max(0, Number(caption.start) || 0);
       const end = Math.max(start, Number(caption.end) || start);
@@ -720,6 +720,7 @@ export function inspectTranscript(project, audioClipId = "") {
         duration: end - start,
         speaker: caption.speaker || caption.speakerId || "",
         audioClipId: caption.audioSegmentId || "",
+        detachedAudioClipId: caption.detachedAudioSegmentId || "",
         words,
       };
     }).sort((left, right) => left.start - right.start || left.index - right.index);

@@ -19,11 +19,11 @@ Người dùng tự chịu mọi trách nhiệm pháp lý phát sinh từ việc
 
 ## Cập nhật dự án
 
+- **10 tháng 9, 2026 — WebMCP cho trình chỉnh sửa đang mở:** trình duyệt tương thích cho phép tác nhân đọc dự án bằng công cụ có cấu trúc, chuyển vị trí xem trước và xem xét kế hoạch sắp xếp hoặc cắt clip trước khi áp dụng. Bộ điều hợp dùng chung bộ máy lệnh, phát hiện chỉnh sửa đồng thời và giữ khả năng hoàn tác. Đã bổ sung thông tin khám phá và tài liệu tích hợp; URL gốc vẫn mở thẳng trình chỉnh sửa.
 - **8 tháng 9, 2026 — Kéo đầu phát mượt hơn:** gộp cập nhật con trỏ theo từng khung hình màn hình, hoàn tất lần tìm khung hình video đang chạy trước khi chuyển đến thời điểm yêu cầu mới nhất và lưu đệm kết quả lấy mẫu dòng thời gian. Việc tinh chỉnh hình thu nhỏ tạm dừng suốt thao tác kéo; khi thả, đầu phát đến đúng vị trí cuối cùng mà không đổi cách điều khiển.
 - **8 tháng 9, 2026 — Dấu mốc dành cho tác nhân:** tác nhân có thể đọc, thêm, cập nhật và xóa dấu mốc qua Skill, CLI và MCP để lên kế hoạch cho chương và nhịp nhạc hoặc ghi lại ý kiến chỉnh sửa, với kiểm tra dự án và xem trước khác biệt ngữ nghĩa trước khi áp dụng thay đổi.
 - **7 tháng 9, 2026 — Dấu mốc dòng thời gian:** thêm dấu mốc, chương, khoảng và ghi chú để tổ chức video dài, đánh dấu nhịp nhạc và ghi lại phản hồi chỉnh sửa. Chỉnh sửa tiêu đề, ghi chú, thời gian và màu sắc, tìm kiếm và chuyển đến dấu mốc, hoặc nhấn M để đánh dấu tại đầu phát. Dấu mốc giữ nguyên vị trí thời gian, được lưu trong dự án `.timeline` có thể chuyển sang thiết bị khác và hỗ trợ hoàn tác/làm lại bằng cả 13 ngôn ngữ giao diện.
 - **3 tháng 9, 2026 — Giao diện tiếng Ý và tiếng Indonesia:** Timeline Studio hiện hỗ trợ 13 ngôn ngữ giao diện. Cả hai có từ điển trình chỉnh sửa và thông báo khi chạy đầy đủ, thuật ngữ đã rà soát cho phụ đề, dòng thời gian, Smart Frame, Nhạc AI, thiết kế vector và plugin tạo nội dung, cùng phông chữ và nhận dạng Whisper tương ứng.
-- **1 tháng 9, 2026 — Video sẵn sàng nhanh mà vẫn đồng bộ:** nhập cục bộ và trực tuyến chỉ chờ một nhóm nhỏ khung hình hạt giống có PTS thật, điều chỉnh theo thiết bị, thay vì bị chặn bởi 120–240 hình thu nhỏ. Sau đó các khung hình chính xác ưu tiên hoàn thiện vùng đang thấy rồi tiếp tục ngoài màn hình theo thứ tự chia đôi tại trung điểm. Mỗi hình thu nhỏ dùng khung hình cuối cùng trước thời gian nguồn yêu cầu, ô đầu phát theo bản xem trước trực tiếp và cập nhật nền tạm dừng khi tua.
 
 Xem [Roadmap](ROADMAP.md) cho công việc dự kiến, [Releases](https://github.com/MartinDelophy/ai-video-editor/releases) cho thay đổi đã phát hành và [Issues](https://github.com/MartinDelophy/ai-video-editor/issues) cho nhiệm vụ và lỗi.
 
@@ -77,12 +77,12 @@ gh skill install MartinDelophy/ai-video-editor edit-timeline-studio --agent clau
 gh skill install MartinDelophy/ai-video-editor edit-timeline-studio --agent codex --scope user
 ```
 
-Thêm `--pin v1.0.7` để cài bản phát hành đã được kiểm chứng thay vì luôn theo bản mới nhất. Có thể xem trước nội dung bằng `gh skill preview MartinDelophy/ai-video-editor edit-timeline-studio`.
+Thêm `--pin v1.0.8` để cài bản phát hành đã được kiểm chứng thay vì luôn theo bản mới nhất. Có thể xem trước nội dung bằng `gh skill preview MartinDelophy/ai-video-editor edit-timeline-studio`.
 
 ## Lộ trình
 
 - **Hiện tại:** củng cố quy trình xuất ngoại tuyến xác định, tăng độ tin cậy của dòng thời gian và mở rộng kiểm thử đầu-cuối trong trình duyệt.
-- **Tiếp theo:** phát hành trình chạy lệnh headless có phiên bản cho chỉnh sửa bằng tác nhân và giúp chia sẻ mẫu dự án tái sử dụng dễ dàng hơn.
+- **Tiếp theo:** mở rộng tính tương đương giữa kết xuất headless và trình duyệt, các lệnh WebMCP có thể xem xét và việc chia sẻ mẫu dự án.
 - **Sau này:** bổ sung quy trình đánh giá cộng tác, giao diện tiện ích mở rộng và thêm các mô hình AI được xác minh cục bộ.
 
 Các ưu tiên được thảo luận tại [GitHub Discussions](https://github.com/MartinDelophy/ai-video-editor/discussions).

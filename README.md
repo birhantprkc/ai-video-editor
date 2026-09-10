@@ -24,11 +24,11 @@ Users are solely responsible for any legal liability arising from violations of 
 
 ## Project updates
 
+- **September 10, 2026 — WebMCP for the live editor:** supported browsers can expose the open project to agents for structured inspection, preview seeking, and reviewed visual reorder/trim plans. The browser adapter reuses the shared command engine, checks for concurrent edits before applying, and preserves editor undo. Agent discovery and integration documentation are included; the root URL still opens directly into the editor.
 - **September 8, 2026 — Smoother playhead dragging:** pointer updates are combined once per display frame, in-flight video seeks complete before advancing to the latest requested time, and timeline sampling is cached. Thumbnail refinement pauses throughout dragging; releasing the pointer resolves the exact final position with the same controls.
 - **September 8, 2026 — Timeline markers for Agents:** Agents can read, add, update, and delete timeline markers through the Skill, CLI, and MCP to plan chapters and musical beats or record revision notes, with project inspection and semantic diff previews before applying changes.
 - **September 7, 2026 — Timeline markers:** add markers, chapters, ranges, and notes to organize long edits, mark musical beats, and record revision feedback. Edit titles, notes, times, and colors, search and jump between markers, and use M to mark the playhead. Markers stay at project time, are saved in portable `.timeline` projects, and support undo/redo in all 13 interface languages.
 - **September 3, 2026 — Italian and Indonesian interfaces:** Timeline Studio now offers 13 interface languages. Italian and Indonesian include complete editor and runtime-message dictionaries, reviewed terminology for captions, timeline tools, Smart Frame, AI Music, vector design and generation plugins, matching fonts, and Whisper subtitle recognition.
-- **September 1, 2026 — Sync-safe instant video readiness:** local and online imports now block only for a small device-adaptive set of real-PTS seed frames instead of 120–240 thumbnails, so a prepared filmstrip becomes editable much sooner without stretching one poster across the clip. Exact frames then refine the visible viewport first and continue through offscreen cells in midpoint-bisection order; thumbnail selection remains strictly at-or-before the requested source time, the playhead uses the live preview frame, and batched background commits pause during scrubbing.
 
 See the public [Roadmap](ROADMAP.md) for planned work, [Releases](https://github.com/MartinDelophy/ai-video-editor/releases) for shipped changes, and [Issues](https://github.com/MartinDelophy/ai-video-editor/issues) for focused tasks and bugs.
 
@@ -111,7 +111,7 @@ It helps an agent:
 - verify track placement, transitions, captions, overlays, audible audio, and final export artifacts;
 - keep the editable `.timeline` project as the source of truth instead of returning only an opaque render.
 
-The versioned headless command runner loads and inspects portable projects, validates revisioned JSON plans, applies supported operations transactionally, supports dry runs and idempotent operation IDs, and writes a new `.timeline` archive without rewriting its media files. It also renders the documented portable Visuals + Voiceover + Music subset to a verified H.264/AAC MP4. Browser control remains the compatibility path for richer compositions and operations that are not in the command registry yet.
+The versioned headless command runner loads and inspects portable projects, validates revisioned JSON plans, applies supported operations transactionally, supports dry runs and idempotent operation IDs, and writes a new `.timeline` archive without rewriting its media files. It also renders the documented portable Visuals + Voiceover + Music subset to a verified H.264/AAC MP4. Browser control remains the compatibility path for richer compositions and operations that are not in the command registry yet. The [browser WebMCP integration](docs/webmcp.md) adds structured reads and reviewed basic visual edits to the project already open in a compatible browser, with conflict checks and editor undo.
 
 ```bash
 npm run agent -- project.inspect /absolute/path/project.timeline
@@ -141,7 +141,7 @@ gh skill install MartinDelophy/ai-video-editor edit-timeline-studio --agent clau
 gh skill install MartinDelophy/ai-video-editor edit-timeline-studio --agent codex --scope user
 ```
 
-To install the tested release instead of following the latest release, add `--pin v1.0.7`. Preview the Skill before installing with:
+To install the tested release instead of following the latest release, add `--pin v1.0.8`. Preview the Skill before installing with:
 
 ```bash
 gh skill preview MartinDelophy/ai-video-editor edit-timeline-studio
@@ -150,7 +150,7 @@ gh skill preview MartinDelophy/ai-video-editor edit-timeline-studio
 ## Roadmap
 
 - **Now:** expand the versioned command registry, harden deterministic offline export, and improve timeline editing reliability.
-- **Next:** expand headless render parity and expose the shared command engine through MCP.
+- **Next:** expand headless render parity and the reviewed browser WebMCP command subset.
 - **Later:** add collaborative review workflows, a plugin extension surface, and more locally verified AI models.
 
 Roadmap priorities are shaped in [GitHub Discussions](https://github.com/MartinDelophy/ai-video-editor/discussions). Feature requests and real-world workflow feedback are welcome.
