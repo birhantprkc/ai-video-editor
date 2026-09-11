@@ -1,8 +1,10 @@
 import { MAX_TIMELINE_MARKER_SECONDS, TIMELINE_MARKER_COLORS, TIMELINE_MARKER_TYPES, normalizeTimelineMarkers } from "./timelineMarkers.js";
+import { getCaptionTimeline, getTimedSegmentsEnd } from "./timeline.js";
 
 export const PROJECT_COMMAND_SCHEMA_VERSION = 1;
 
 const COMMAND_STATE_KEY = "commandState";
+const MIN_TIMED_CAPTION_SECONDS = 0.2;
 
 function failure(code, message, operationId = "") {
   return { ok: false, code, message, ...(operationId ? { operationId } : {}) };
@@ -19,6 +21,31 @@ function finitePositive(value, name) {
   const result = finiteNonNegative(value, name);
   if (result <= 0) throw Object.assign(new Error(`${name} must be greater than zero`), { code: "INVALID_ARGUMENT" });
   return result;
+}
+
+function requireCaptionRange(start, end) {
+  finiteNonNegative(start, "caption start");
+  finiteNonNegative(end, "caption end");
+  const tolerance = Number.EPSILON * Math.max(1, start, end) * 4;
+  if (end - start < MIN_TIMED_CAPTION_SECONDS - tolerance) {
+    throw Object.assign(new Error("Captions must last at least 0.2 seconds"), { code: "INVALID_RANGE" });
+  }
+}
+
+function resolveProjectCaptions(project) {
+  const captions = Array.isArray(project?.captionSegments) ? project.captionSegments : [];
+  const timeline = getCaptionTimeline(captions, getTimedSegmentsEnd(project?.audioSegments || []));
+  return captions.map((caption, index) => ({ ...caption, start: timeline[index].start, end: timeline[index].end }));
+}
+
+// Caption timing can be implicit in a saved project. Match the editor's
+// voice-track clock before editing so inserting an explicit caption or adding
+// voice media cannot rescale the existing subtitles behind the review. Reads
+// use the same resolver without the editable-duration constraint.
+export function materializeProjectCaptionTimings(project) {
+  const captions = resolveProjectCaptions(project);
+  for (const caption of captions) requireCaptionRange(caption.start, caption.end);
+  return { ...project, captionSegments: captions };
 }
 
 function findById(items, id, kind) {
@@ -83,7 +110,25 @@ function remapKeyframes(keyframes, start, end) {
     .map((frame) => ({ ...frame, time: Number(frame.time) - start }));
 }
 
+// Older projects identify source audio by asset ID. Resolve that implicit
+// relationship before changing the sequence, so deleting the last explicitly
+// mapped piece can never attach previously unmapped sibling clips.
+function materializeSourceAudioMappings(project) {
+  const visuals = project.visualSegments || [];
+  const hasMapped = visuals.some((clip) => clip.type === "video" && Number.isFinite(clip.sourceAudioOffset));
+  const candidates = [...new Set(visuals.filter((clip) => clip.type === "video" && clip.assetId).map((clip) => clip.assetId))];
+  const legacyAssetId = project.sourceAudioAssetId || (candidates.length === 1 ? candidates[0] : "");
+  if (!hasMapped && !(legacyAssetId && Number(project.sourceAudioDuration) > 0)) return;
+  project.visualSegments = visuals.map((clip) => {
+    if (clip.type !== "video" || clip.sourceAudioUnmapped || Number.isFinite(clip.sourceAudioOffset)) return clip;
+    return !hasMapped && clip.assetId === legacyAssetId
+      ? { ...clip, sourceAudioOffset: 0 }
+      : { ...clip, sourceAudioUnmapped: true };
+  });
+}
+
 function trimVisual(project, operation) {
+  materializeSourceAudioMappings(project);
   const segment = findById(project.visualSegments, operation.clipId, "Visual clip");
   if (segment.type !== "video") throw Object.assign(new Error("visual.trim currently supports video clips only"), { code: "UNSUPPORTED_MEDIA_TYPE" });
   const sourceIn = finiteNonNegative(operation.sourceIn, "sourceIn");
@@ -105,6 +150,7 @@ function trimVisual(project, operation) {
 }
 
 function splitVisual(project, operation) {
+  materializeSourceAudioMappings(project);
   const visuals = Array.isArray(project.visualSegments) ? project.visualSegments : [];
   const index = visuals.findIndex((segment) => segment.id === operation.clipId);
   if (index < 0) throw Object.assign(new Error(`Visual clip not found: ${operation.clipId}`), { code: "CLIP_NOT_FOUND" });
@@ -114,7 +160,7 @@ function splitVisual(project, operation) {
   if (at >= duration) throw Object.assign(new Error("at must be inside the visual clip"), { code: "INVALID_RANGE" });
   const rightClipId = typeof operation.rightClipId === "string" ? operation.rightClipId.trim() : "";
   if (!rightClipId) throw Object.assign(new Error("rightClipId is required"), { code: "INVALID_ARGUMENT" });
-  if (visuals.some((item) => item.id === rightClipId)) throw Object.assign(new Error(`Visual clip already exists: ${rightClipId}`), { code: "CLIP_ALREADY_EXISTS" });
+  requireNewClipId(project, rightClipId);
   const rate = segment.type === "video" ? visualPlaybackRate(segment) : 1;
   const archiveMediaId = segment.archiveMediaId || segment.id;
   const left = { ...segment, archiveMediaId, duration: at };
@@ -138,6 +184,7 @@ function reorderVisual(project, operation) {
   if (!Number.isInteger(operation.toIndex) || operation.toIndex < 0 || operation.toIndex >= visuals.length) {
     throw Object.assign(new Error("toIndex must identify an existing visual position"), { code: "INVALID_ARGUMENT" });
   }
+  if (from === operation.toIndex) return;
   const next = [...visuals];
   const [moved] = next.splice(from, 1);
   next.splice(operation.toIndex, 0, moved);
@@ -177,6 +224,7 @@ function cloneVisualForSequence(project, operation) {
 }
 
 function appendVisual(project, operation) {
+  materializeSourceAudioMappings(project);
   project.visualSegments = [...(project.visualSegments || []), cloneVisualForSequence(project, operation)];
 }
 
@@ -205,6 +253,7 @@ function importAsset(project, operation) {
     return;
   }
   if (!["image", "video"].includes(operation.mediaType)) throw Object.assign(new Error("Visuals import requires image or video media"), { code: "UNSUPPORTED_MEDIA_TYPE" });
+  materializeSourceAudioMappings(project);
   const segment = {
     id,
     assetId: operation.assetId || `asset-${operation.sha256.slice(0, 16)}`,
@@ -218,18 +267,85 @@ function importAsset(project, operation) {
     sourceDuration: operation.mediaType === "video" ? duration : 0,
     playbackRate: 1,
     muted: operation.muted === true,
+    ...(operation.mediaType === "video" ? { sourceAudioUnmapped: true, sourceAudioDisabled: operation.muted === true } : {}),
     integrity,
   };
   project.visualSegments = [...(project.visualSegments || []), segment];
 }
 
 function insertVisual(project, operation) {
+  materializeSourceAudioMappings(project);
   const visuals = Array.isArray(project.visualSegments) ? project.visualSegments : [];
   if (!Number.isInteger(operation.atIndex) || operation.atIndex < 0 || operation.atIndex > visuals.length) {
     throw Object.assign(new Error("atIndex must be a valid visual insertion position"), { code: "INVALID_ARGUMENT" });
   }
   const next = cloneVisualForSequence(project, operation);
   project.visualSegments = [...visuals.slice(0, operation.atIndex), next, ...visuals.slice(operation.atIndex)];
+}
+
+function deleteVisual(project, operation) {
+  materializeSourceAudioMappings(project);
+  findById(project.visualSegments, operation.clipId, "Visual clip");
+  project.visualSegments = project.visualSegments.filter((clip) => clip.id !== operation.clipId);
+}
+
+function duplicateVisual(project, operation) {
+  materializeSourceAudioMappings(project);
+  const source = findById(project.visualSegments, operation.clipId, "Visual clip");
+  const id = requireNewClipId(project, operation.newClipId);
+  const sourceIndex = project.visualSegments.indexOf(source);
+  const atIndex = operation.atIndex === undefined ? sourceIndex + 1 : operation.atIndex;
+  if (!Number.isInteger(atIndex) || atIndex < 0 || atIndex > project.visualSegments.length) {
+    throw Object.assign(new Error("atIndex must be a valid visual insertion position"), { code: "INVALID_ARGUMENT" });
+  }
+  const copy = { ...structuredClone(source), id, archiveMediaId: source.archiveMediaId || source.id };
+  // A transition belongs to a boundary, not to the duplicated media clip.
+  delete copy.transition;
+  project.visualSegments.splice(atIndex, 0, copy);
+}
+
+// The host prepares local asset metadata. Browser callers cannot supply this
+// payload: the browser planner resolves an asset ID and constructs it itself.
+function insertPreparedAsset(project, operation) {
+  if (operation.track === "visuals") materializeSourceAudioMappings(project);
+  const id = requireNewClipId(project, operation.clipId);
+  const source = operation.preparedSource;
+  if (operation.prepared !== true || !source || !["image", "video", "audio"].includes(source.type)) {
+    throw Object.assign(new Error("asset.insert requires host-prepared media metadata"), { code: "ASSET_NOT_PREPARED" });
+  }
+  const duration = finitePositive(operation.duration, "duration");
+  const segment = { ...structuredClone(source), id, duration };
+  if (source.type !== "image") {
+    const available = finitePositive(source.sourceDuration, "sourceDuration");
+    if (duration > available) throw Object.assign(new Error("Asset duration exceeds its source"), { code: "SOURCE_RANGE_EXCEEDED" });
+    segment.sourceDuration = duration;
+  }
+  if (operation.track === "visuals") {
+    if (!["image", "video"].includes(source.type)) throw Object.assign(new Error("Visuals require image or video media"), { code: "UNSUPPORTED_MEDIA_TYPE" });
+    if (!Number.isInteger(operation.atIndex) || operation.atIndex < 0 || operation.atIndex > (project.visualSegments || []).length) {
+      throw Object.assign(new Error("atIndex must be a valid visual insertion position"), { code: "INVALID_ARGUMENT" });
+    }
+    delete segment.start;
+    project.visualSegments.splice(operation.atIndex, 0, segment);
+  } else if (operation.track === "overlays") {
+    if (!["image", "video"].includes(source.type)) throw Object.assign(new Error("Overlays require image or video media"), { code: "UNSUPPORTED_MEDIA_TYPE" });
+    segment.start = finiteNonNegative(operation.start, "start");
+    segment.layer = operation.layer;
+    segment.baseTransform = { x: 27, y: -24, scale: 0.34, rotation: 0, opacity: 1, ...operation.transform };
+    project.visualOverlaySegments = [...(project.visualOverlaySegments || []), segment];
+  } else if (["audio", "music"].includes(operation.track)) {
+    if (source.type !== "audio") throw Object.assign(new Error("Audio tracks require audio media"), { code: "UNSUPPORTED_MEDIA_TYPE" });
+    segment.start = finiteNonNegative(operation.start, "start");
+    if (operation.lane !== undefined) segment.lane = operation.lane;
+    const key = operation.track === "audio" ? "audioSegments" : "musicSegments";
+    project[key] = [...(project[key] || []), segment];
+    if (operation.track === "audio") project.audioDuration = project.audioSegments.reduce((end, clip) => Math.max(end, clip.start + clip.duration), 0);
+    else {
+      project.musicName = source.name;
+      project.musicDuration = source.sourceDuration;
+      project.musicStart = Math.min(...project.musicSegments.map((clip) => clip.start));
+    }
+  } else throw Object.assign(new Error("Unknown asset track"), { code: "UNSUPPORTED_TRACK" });
 }
 
 function addOverlay(project, operation) {
@@ -289,6 +405,7 @@ function setTransition(project, operation) {
 }
 
 function updateCaption(project, operation) {
+  project.captionSegments = materializeProjectCaptionTimings(project).captionSegments;
   const caption = findById(project.captionSegments, operation.clipId, "Caption clip");
   if (Object.hasOwn(operation, "text")) {
     if (typeof operation.text !== "string") throw Object.assign(new Error("text must be a string"), { code: "INVALID_ARGUMENT" });
@@ -296,15 +413,13 @@ function updateCaption(project, operation) {
   }
   if (Object.hasOwn(operation, "start")) caption.start = finiteNonNegative(operation.start, "start");
   if (Object.hasOwn(operation, "end")) caption.end = finiteNonNegative(operation.end, "end");
-  if (Number(caption.end) < Number(caption.start)) {
-    throw Object.assign(new Error("caption end must not be before start"), { code: "INVALID_RANGE" });
-  }
+  requireCaptionRange(caption.start, caption.end);
   project.script = (project.captionSegments || []).map((item) => item.text).join("\n");
 }
 
 function addCaption(project, operation) {
-  const id = typeof operation.clipId === "string" ? operation.clipId.trim() : "";
-  if (!id) throw Object.assign(new Error("clipId is required"), { code: "INVALID_ARGUMENT" });
+  project.captionSegments = materializeProjectCaptionTimings(project).captionSegments;
+  const id = requireNewClipId(project, operation.clipId);
   const captions = Array.isArray(project.captionSegments) ? project.captionSegments : [];
   if (captions.some((caption) => caption.id === id)) {
     throw Object.assign(new Error(`Caption clip already exists: ${id}`), { code: "CLIP_ALREADY_EXISTS" });
@@ -312,7 +427,7 @@ function addCaption(project, operation) {
   if (typeof operation.text !== "string") throw Object.assign(new Error("text must be a string"), { code: "INVALID_ARGUMENT" });
   const start = finiteNonNegative(operation.start, "start");
   const end = finiteNonNegative(operation.end, "end");
-  if (end < start) throw Object.assign(new Error("caption end must not be before start"), { code: "INVALID_RANGE" });
+  requireCaptionRange(start, end);
   let audioSegmentId = "";
   if (operation.audioClipId) audioSegmentId = findById(project.audioSegments, operation.audioClipId, "Audio clip").id;
   const previousCaption = [...captions]
@@ -328,12 +443,14 @@ function addCaption(project, operation) {
     ...(audioSegmentId ? { audioSegmentId } : {}),
   }].sort((left, right) => (Number(left.start) || 0) - (Number(right.start) || 0));
   project.script = project.captionSegments.map((item) => item.text).join("\n");
+  project.captionsEnabled = true;
 }
 
 function deleteClip(project, operation) {
   const collections = { caption: "captionSegments", audio: "audioSegments" };
   const key = collections[operation.track];
   if (!key) throw Object.assign(new Error(`Unsupported clip track: ${operation.track}`), { code: "UNSUPPORTED_TRACK" });
+  if (operation.track === "caption") project.captionSegments = materializeProjectCaptionTimings(project).captionSegments;
   findById(project[key], operation.clipId, `${operation.track === "caption" ? "Caption" : "Audio"} clip`);
   project[key] = project[key].filter((item) => item.id !== operation.clipId);
   if (operation.track === "caption") {
@@ -428,12 +545,13 @@ function setClipSpeed(project, operation) {
 function setClipMuted(project, operation) {
   if (typeof operation.muted !== "boolean") throw Object.assign(new Error("muted must be a boolean"), { code: "INVALID_ARGUMENT" });
   const { track, clip } = findClipMatch(project, operation.clipId);
-  if (!["visuals", "audio", "overlays"].includes(track)) {
+  if (!["visuals", "audio", "overlays", "music"].includes(track)) {
     throw Object.assign(new Error(`Mute is unsupported for ${track} clips`), { code: "UNSUPPORTED_TRACK" });
   }
   if ((track === "visuals" || track === "overlays") && clip.type !== "video") {
     throw Object.assign(new Error("Mute is supported only for video or audio clips"), { code: "UNSUPPORTED_MEDIA_TYPE" });
   }
+  if (track === "visuals") clip.sourceAudioDisabled = operation.muted;
   clip.muted = operation.muted;
 }
 
@@ -563,6 +681,7 @@ function deleteMarker(project, operation) {
 
 const reducers = {
   "asset.import": importAsset,
+  "asset.insert": insertPreparedAsset,
   "timed.move": moveTimed,
   "timed.resize": resizeTimed,
   "visual.trim": trimVisual,
@@ -570,10 +689,13 @@ const reducers = {
   "visual.reorder": reorderVisual,
   "visual.append": appendVisual,
   "visual.insert": insertVisual,
+  "visual.delete": deleteVisual,
+  "visual.duplicate": duplicateVisual,
   "overlay.add": addOverlay,
   "transition.set": setTransition,
   "caption.add": addCaption,
   "caption.update": updateCaption,
+  "caption.delete": (project, operation) => deleteClip(project, { ...operation, track: "caption" }),
   "caption.unlink_audio": unlinkCaption,
   "caption.link_audio": linkCaption,
   "marker.add": addMarker,
@@ -598,14 +720,14 @@ export function validateCommandPlan(plan) {
     if (!operation || typeof operation.id !== "string" || !operation.id.trim()) return failure("INVALID_PLAN", "Every operation requires an id");
     if (ids.has(operation.id)) return failure("DUPLICATE_OPERATION_ID", `Duplicate operation id: ${operation.id}`, operation.id);
     ids.add(operation.id);
-    if (!reducers[operation.type]) return failure("UNKNOWN_OPERATION", `Unknown operation type: ${operation.type}`, operation.id);
+    if (!Object.hasOwn(reducers, operation.type)) return failure("UNKNOWN_OPERATION", `Unknown operation type: ${operation.type}`, operation.id);
   }
   return { ok: true };
 }
 
 export function inspectProject(project) {
   const state = commandState(project);
-  const captions = Array.isArray(project?.captionSegments) ? project.captionSegments : [];
+  const captions = resolveProjectCaptions(project);
   const audio = Array.isArray(project?.audioSegments) ? project.audioSegments : [];
   const visuals = Array.isArray(project?.visualSegments) ? project.visualSegments : [];
   const stickers = Array.isArray(project?.stickerSegments) ? project.stickerSegments : [];
@@ -658,7 +780,7 @@ function clipSummary(track, clip, index, visualStart = 0) {
 export function inspectTrack(project, track) {
   const key = TRACK_COLLECTIONS[track];
   if (!key) throw Object.assign(new Error(`Unknown track: ${track}`), { code: "TRACK_NOT_FOUND" });
-  const clips = Array.isArray(project?.[key]) ? project[key] : [];
+  const clips = track === "captions" ? resolveProjectCaptions(project) : Array.isArray(project?.[key]) ? project[key] : [];
   let visualCursor = 0;
   const summaries = clips.map((clip, index) => {
     const summary = clipSummary(track, clip, index, visualCursor);
@@ -678,7 +800,8 @@ export function inspectTrack(project, track) {
 }
 
 export function inspectClip(project, clipId) {
-  const { track, clip, index } = findClipMatch(project, clipId);
+  const { track, clip: storedClip, index } = findClipMatch(project, clipId);
+  const clip = track === "captions" ? resolveProjectCaptions(project)[index] : storedClip;
   const visualStart = track === "visuals"
     ? project.visualSegments.slice(0, index).reduce((total, item) => total + Math.max(0, Number(item.duration) || 0), 0)
     : 0;
@@ -700,8 +823,7 @@ export function inspectClip(project, clipId) {
 }
 
 export function inspectTranscript(project, audioClipId = "") {
-  const captions = (Array.isArray(project?.captionSegments) ? project.captionSegments : [])
-    .filter((caption) => !audioClipId || (caption.audioSegmentId || caption.detachedAudioSegmentId) === audioClipId)
+  const captions = resolveProjectCaptions(project)
     .map((caption, index) => {
       const start = Math.max(0, Number(caption.start) || 0);
       const end = Math.max(start, Number(caption.end) || start);
@@ -723,7 +845,8 @@ export function inspectTranscript(project, audioClipId = "") {
         detachedAudioClipId: caption.detachedAudioSegmentId || "",
         words,
       };
-    }).sort((left, right) => left.start - right.start || left.index - right.index);
+    }).filter((caption) => !audioClipId || (caption.audioClipId || caption.detachedAudioClipId) === audioClipId)
+    .sort((left, right) => left.start - right.start || left.index - right.index);
   return {
     schemaVersion: PROJECT_COMMAND_SCHEMA_VERSION,
     revision: commandState(project).revision,
@@ -753,7 +876,7 @@ function sameValue(left, right) {
 }
 
 export function diffProjects(beforeProject, afterProject) {
-  const projectFields = ["ratioId", "fitMode", "trackVisibility", "trackLocks", "script"]
+  const projectFields = ["ratioId", "fitMode", "trackVisibility", "trackLocks", "script", "captionsEnabled"]
     .flatMap((field) => sameValue(beforeProject?.[field], afterProject?.[field]) ? [] : [{ field, before: beforeProject?.[field] ?? null, after: afterProject?.[field] ?? null }]);
   const tracks = Object.fromEntries(Object.entries(TRACK_COLLECTIONS).flatMap(([track, key]) => {
     const before = Array.isArray(beforeProject?.[key]) ? beforeProject[key] : [];

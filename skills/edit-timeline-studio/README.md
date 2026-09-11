@@ -17,11 +17,11 @@ Users are solely responsible for any legal liability arising from violations of 
 
 ## Project updates
 
+- **September 11, 2026 — WebMCP editing and video delivery:** 15 browser tools now cover reviewed caption changes, audio volume and fades, markers, main-visual splitting/deletion/duplication, existing-asset discovery and insertion, and picture-in-picture. Agents can prepare export settings, start the real editor exporter, inspect progress and actual output metadata, or cancel. Multi-operation edits retain conflict checks, ripple behavior, track locks and undo; repeated export requests do not trigger duplicate downloads. Tool and review copy covers all 13 interface languages.
 - **September 10, 2026 — WebMCP for the live editor:** supported browsers can expose the open project to agents for structured inspection, preview seeking, and reviewed visual reorder/trim plans. The browser adapter reuses the shared command engine, checks for concurrent edits before applying, and preserves editor undo. Agent discovery and integration documentation are included; the root URL still opens directly into the editor.
 - **September 8, 2026 — Smoother playhead dragging:** pointer updates are combined once per display frame, in-flight video seeks complete before advancing to the latest requested time, and timeline sampling is cached. Thumbnail refinement pauses throughout dragging; releasing the pointer resolves the exact final position with the same controls.
 - **September 8, 2026 — Timeline markers for Agents:** Agents can read, add, update, and delete timeline markers through the Skill, CLI, and MCP to plan chapters and musical beats or record revision notes, with project inspection and semantic diff previews before applying changes.
 - **September 7, 2026 — Timeline markers:** add markers, chapters, ranges, and notes to organize long edits, mark musical beats, and record revision feedback. Edit titles, notes, times, and colors, search and jump between markers, and use M to mark the playhead. Markers stay at project time, are saved in portable `.timeline` projects, and support undo/redo in all 13 interface languages.
-- **September 3, 2026 — Italian and Indonesian interfaces:** Timeline Studio now offers 13 interface languages. Italian and Indonesian include complete editor and runtime-message dictionaries, reviewed terminology for captions, timeline tools, Smart Frame, AI Music, vector design and generation plugins, matching fonts, and Whisper subtitle recognition.
 
 Timeline Studio is a local-first browser video editor plus an Agent Skill for creating editable, multi-track `.timeline` projects. It combines visual assembly, timed captions, multilingual AI voiceover, overlays, audio tools, and deterministic browser rendering without turning the project into an opaque one-off script.
 
@@ -36,7 +36,7 @@ Explore reproducible before/after examples and editing recipes:
 ## What it can automate
 
 - Inspect, dry-run, and transactionally modify a portable `.timeline` archive through a versioned JSON command plan.
-- Work with an open browser project through native WebMCP when available: inspect, review reorder/trim plans, apply with conflict checks, seek, undo and download an editable copy. See [browser integration](references/webmcp-integration.md).
+- Work with an open browser project through 15 native WebMCP tools when available: inspect the timeline, assets and markers; review and apply visual/caption/audio/marker operations and existing-asset or picture-in-picture insertion; seek, undo and save an editable copy; or prepare and run real video export with progress, output receipts and cancellation. See [browser integration](references/webmcp-integration.md).
 - Move voiceover clips; update caption text and timing; unlink or relink caption/audio pairs.
 - Import local visual or audio assets through the command runner with probing, SHA-256 integrity metadata, and portable archive embedding; use archived media for Visuals assembly and overlays.
 - Use the browser compatibility path for AI speech, automatic captions, effects, unsupported editor operations, and final video export while more commands move into the shared registry.

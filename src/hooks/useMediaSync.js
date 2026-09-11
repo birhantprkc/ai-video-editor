@@ -56,7 +56,7 @@ export function useMediaSync(d) {
   useEffect(() => { if (d.sourceAudioRef.current) setTimelineAudioGain(d.sourceAudioRef.current, d.sourceAudioVolume, d.sourceAudioSpatialEffect, d.sourceAudioSpatialAmount); }, [d.sourceAudioSpatialAmount, d.sourceAudioSpatialEffect, d.sourceAudioVolume, d.sourceAudioUrl]);
   useEffect(() => {
     const a = d.sourceAudioRef.current; if (!a || !d.sourceAudioUrl) return;
-    const state = d.sourceAudioLinked && d.linkedSourceAudioSegments?.length
+    const state = d.sourceAudioLinked
       ? getLinkedSourceAudioState(d.linkedSourceAudioSegments, d.currentTime)
       : { active: isTimelineTimeInsideTrack(d.currentTime, d.sourceAudioStart, d.sourceAudioDuration), sourceTime: getTimelineTrackLocalTime(d.currentTime, d.sourceAudioStart, d.sourceAudioDuration), playbackRate: 1 };
     const play = d.isPlaying && d.trackVisibility?.source !== false && state.active;
@@ -143,7 +143,7 @@ export function useMediaSync(d) {
   useEffect(() => { d.setCurrentTime((time) => {
     const clamped = Math.min(time, d.timelineDuration);
     if (d.audioRef.current && clamped !== time) d.audioRef.current.currentTime = clamped;
-    if (d.sourceAudioRef.current && clamped !== time) d.sourceAudioRef.current.currentTime = d.sourceAudioLinked && d.linkedSourceAudioSegments?.length
+    if (d.sourceAudioRef.current && clamped !== time) d.sourceAudioRef.current.currentTime = d.sourceAudioLinked
       ? getLinkedSourceAudioState(d.linkedSourceAudioSegments, clamped).sourceTime
       : getTimelineTrackLocalTime(clamped, d.sourceAudioStart, d.sourceAudioDuration);
     if (d.musicRef.current && clamped !== time) {

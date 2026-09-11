@@ -108,7 +108,7 @@ export async function mixOfflineAudio({
 }) {
   const inputs = [
     ...voiceAudioSegments.filter((item) => item.blob).map((item) => ({
-      blob: item.blob, start: Math.max(0, item.start || 0), volume: item.volume ?? 1,
+      blob: item.blob, start: Math.max(0, item.start || 0), volume: item.muted === true ? 0 : item.volume ?? 1,
       sourceOffset: Math.max(0, item.sourceStart || 0), sourceDuration: Math.max(0, item.sourceDuration || (item.duration || 0) * (Number(item.playbackRate) || 1)), playbackRate: clamp(Number(item.playbackRate) || 1, 0.25, 4),
       fadeIn: Math.max(0, item.fadeIn || 0), fadeOut: Math.max(0, item.fadeOut || 0),
       spatialEffect: item.spatialEffect, spatialAmount: item.spatialAmount,
@@ -120,7 +120,7 @@ export async function mixOfflineAudio({
       spatialEffect: sourceAudioSpatialEffect, spatialAmount: sourceAudioSpatialAmount,
     })) : sourceAudioBlob ? [{ blob: sourceAudioBlob, start: Math.max(0, sourceAudioStart), volume: sourceAudioVolume, sourceOffset: 0, sourceDuration: 0, playbackRate: 1, fadeIn: 0, fadeOut: 0, spatialEffect: sourceAudioSpatialEffect, spatialAmount: sourceAudioSpatialAmount }] : []),
     ...(musicBlob ? (musicSegments.length ? musicSegments.map((item) => ({
-      blob: musicBlob, start: Math.max(0, item.start || 0), volume: item.volume ?? musicVolume,
+      blob: musicBlob, start: Math.max(0, item.start || 0), volume: item.muted === true ? 0 : item.volume ?? musicVolume,
       sourceOffset: Math.max(0, item.sourceStart || 0), sourceDuration: Math.max(0, item.sourceDuration || (item.duration || 0) * (Number(item.playbackRate) || 1)),
       playbackRate: clamp(Number(item.playbackRate) || 1, 0.25, 4), fadeIn: Math.max(0, item.fadeIn || 0), fadeOut: Math.max(0, item.fadeOut || 0),
       spatialEffect: item.spatialEffect, spatialAmount: item.spatialAmount,

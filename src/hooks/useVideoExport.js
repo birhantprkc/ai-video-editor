@@ -14,6 +14,7 @@ import { exportOfflineVideo } from "../lib/offlineVideoExport.js";
 import { serializeSrt } from "../lib/subtitles.js";
 import { getVisionKey } from "../lib/vision.js";
 import { prepareEmbeddedVideoAudio } from "../lib/embeddedVideoAudioExport.js";
+import { shouldMuteEmbeddedVideoAudio } from "../lib/sourceAudioSync.js";
 import {
   createGeneratedExportMetadata,
   embedGeneratedMediaMetadata,
@@ -22,7 +23,9 @@ import { filterTimedSegmentsByLaneVisibility } from "../lib/timeline.js";
 
 export function useVideoExport(d) {
   return useCallback(async (options = {}) => {
-    if (d.exporting) return { status: "busy" };
+    // The ref closes the gap before React has committed the exporting state.
+    if (d.exporting || d.exportAbortControllerRef.current) return { status: "busy" };
+    if (options.signal?.aborted) return { status: "canceled" };
     if (!d.imageSrc) {
       d.notify(d.t("exportVisualRequired"));
       return { status: "blocked", error: d.t("exportVisualRequired") };
@@ -39,6 +42,12 @@ export function useVideoExport(d) {
     const controller = new AbortController();
     d.exportAbortControllerRef.current = controller;
     const { signal } = controller;
+    const abortFromCaller = () => controller.abort();
+    options.signal?.addEventListener("abort", abortFromCaller, { once: true });
+    const reportProgress = (value) => {
+      // An observer must not interrupt encoding or turn a saved file into a failure.
+      try { options.onProgress?.(value); } catch { /* The export remains authoritative. */ }
+    };
     d.setExporting(true); d.exportStartRef.current = performance.now(); d.setExportProgress(1);
     const localize = (key, params = {}) => Object.entries(params).reduce(
       (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
@@ -46,12 +55,18 @@ export function useVideoExport(d) {
     );
     const preparingPhase = localize("exportPreparing");
     d.setExportPhase(preparingPhase); d.setStatus("generating"); d.setStatusText(preparingPhase);
+    reportProgress({ progress: 1, phase: preparingPhase, phaseKey: "exportPreparing" });
     const progress = ({ progress, phase, phaseKey, phaseParams }) => {
       d.setExportProgress((current) => Math.max(current, Math.min(100, Math.max(0, Math.round(progress)))));
       const localizedPhase = phaseKey ? localize(phaseKey, phaseParams) : phase;
       if (localizedPhase) d.setExportPhase(localizedPhase);
+      reportProgress({ progress, phase: localizedPhase || "", phaseKey: phaseKey || "" });
     };
-    const finish = async (phase) => { d.setExportPhase(phase); d.setExportProgress(100); await new Promise((resolve) => setTimeout(resolve, 450)); };
+    const finish = async (phase) => {
+      d.setExportPhase(phase); d.setExportProgress(100);
+      reportProgress({ progress: 100, phase, phaseKey: "exportComplete" });
+      await new Promise((resolve) => setTimeout(resolve, 450));
+    };
     let actualPipeline = "";
     try {
       const exportAudio = exportSettings.audio !== "none";
@@ -91,19 +106,46 @@ export function useVideoExport(d) {
             end: exportRange.end,
           })
         : "";
-      const downloadArtifacts = (blob, extension) => {
-        downloadBlob(blob, `${exportBaseName}.${extension}`);
+      const downloadArtifacts = async (blob, extension) => {
+        throwIfExportAborted(signal);
+        if (!(blob instanceof Blob) || blob.size < 12) throw new Error(localize("exportFailed"));
+        const header = new Uint8Array(await blob.slice(0, 12).arrayBuffer());
+        const box = String.fromCharCode(...header.slice(4, 8));
+        const validContainer = extension === "webm"
+          ? header[0] === 0x1a && header[1] === 0x45 && header[2] === 0xdf && header[3] === 0xa3
+          : extension === "mp4" ? box === "ftyp"
+            : extension === "mov" && ["ftyp", "moov", "mdat", "wide"].includes(box);
+        if (!validContainer) throw new Error(localize("exportFailed"));
+        throwIfExportAborted(signal);
+        const fileName = `${exportBaseName}.${extension}`;
+        downloadBlob(blob, fileName);
+        const sidecars = [];
         if (srt) {
           progress({ progress: 99, phaseKey: "exportSaveSrt" });
-          downloadBlob(new Blob(["\uFEFF", srt], { type: "application/x-subrip;charset=utf-8" }), `${exportBaseName}.srt`);
+          const subtitle = new Blob(["\uFEFF", srt], { type: "application/x-subrip;charset=utf-8" });
+          downloadBlob(subtitle, `${exportBaseName}.srt`);
+          sidecars.push({ fileName: `${exportBaseName}.srt`, extension: "srt", byteSize: subtitle.size });
         }
+        return { fileName, extension, byteSize: blob.size, mimeType: blob.type, sidecars };
       };
-      const embeddedVideoAudio = exportAudio && !d.sourceAudioBlob && d.trackVisibility.source !== false
-        ? await prepareEmbeddedVideoAudio(d.renderedVisualSegments, progress, signal)
+      // Preserve the full visual sequence when selecting embedded audio so
+      // source segments retain their actual timeline positions after edits.
+      const embeddedVisuals = d.sourceAudioBlob ? d.renderedVisualSegments.map((segment) => ({
+        ...segment,
+        sourceAudioDisabled: shouldMuteEmbeddedVideoAudio(segment, {
+          sourceAudioBlob: d.sourceAudioBlob, sourceAudioAssetId: d.sourceAudioAssetId,
+          sourceAudioLinked: d.sourceAudioLinked,
+          linkedSegments: d.linkedSourceAudioSegments,
+        }),
+      })) : d.renderedVisualSegments;
+      const embeddedVideoAudio = exportAudio && d.trackVisibility.source !== false
+        ? await prepareEmbeddedVideoAudio(embeddedVisuals, progress, signal)
         : { blob: null, segments: [] };
       throwIfExportAborted(signal);
       const exportSourceAudioBlob = exportAudio && d.trackVisibility.source !== false
-        ? d.sourceAudioBlob || embeddedVideoAudio.blob
+        ? d.sourceAudioBlob
+          ? d.sourceAudioLinked && !d.linkedSourceAudioSegments?.length ? null : d.sourceAudioBlob
+          : embeddedVideoAudio.blob
         : null;
       const exportSourceAudioSegments = d.sourceAudioBlob
         ? d.sourceAudioLinked ? d.linkedSourceAudioSegments : []
@@ -147,7 +189,12 @@ export function useVideoExport(d) {
       const exportOptions = {
         imageSrc: d.imageSrc, visualType: d.visualType,
         visualSegments: exportedVisualSegments,
-        audioBlob: null, voiceAudioSegments, voiceVolume: d.volume,
+        audioBlob: null,
+        voiceAudioSegments: d.sourceAudioBlob && embeddedVideoAudio.blob ? [
+          ...voiceAudioSegments,
+          ...embeddedVideoAudio.segments.map((segment) => ({ ...segment, blob: embeddedVideoAudio.blob, volume: 1, sourceKind: "embedded-source" })),
+        ] : voiceAudioSegments,
+        voiceVolume: d.volume,
         sourceAudioBlob: exportSourceAudioBlob, sourceAudioVolume: d.sourceAudioBlob ? d.sourceAudioVolume : 1,
         sourceAudioSpatialEffect: d.sourceAudioSpatialEffect, sourceAudioSpatialAmount: d.sourceAudioSpatialAmount,
         sourceAudioSegments: exportSourceAudioSegments,
@@ -210,10 +257,10 @@ export function useVideoExport(d) {
           };
         }
         progress({ progress: 99, phaseKey: "exportSaveFile", phaseParams: { format: video.label } });
-        downloadArtifacts(video.blob, video.extension);
+        const artifact = await downloadArtifacts(video.blob, video.extension);
         d.setStatus("done"); d.setStatusText(localize("exportComplete")); await finish(localize("exportComplete"));
         notify(localize(srt ? "exportVideoAndSrtComplete" : "exportVideoComplete", { format: video.label }));
-        return { status: "success", extension: video.extension, byteSize: video.blob.size, actualPipeline };
+        return { status: "success", ...artifact, actualPipeline };
       }
       if (video.nativeMp4) {
         if (generationMetadata && actualPipeline === "compatible") {
@@ -226,22 +273,25 @@ export function useVideoExport(d) {
             }),
           };
         }
-        progress({ progress: 98, phaseKey: "exportSaveFile", phaseParams: { format: "MP4" } }); downloadArtifacts(video.blob, "mp4");
+        progress({ progress: 98, phaseKey: "exportSaveFile", phaseParams: { format: "MP4" } });
+        const artifact = await downloadArtifacts(video.blob, "mp4");
         d.setStatus("done"); d.setStatusText(localize("exportComplete")); await finish(localize("exportComplete")); notify(localize(srt ? "exportVideoAndSrtComplete" : "exportComplete", { format: "MP4" }));
-        return { status: "success", extension: "mp4", byteSize: video.blob.size, actualPipeline };
+        return { status: "success", ...artifact, actualPipeline };
       }
       d.setStatusText(localize("exportFfmpegLoading")); progress({ progress: 95, phaseKey: "exportFfmpegLoading" });
       try {
         d.setStatusText(localize("exportFfmpegTranscoding")); progress({ progress: 96, phaseKey: "exportFfmpegTranscoding" });
         const mp4 = await transcodeWebmToMp4(video.blob, { signal, generationMetadata }); progress({ progress: 99, phaseKey: "exportSaveFile", phaseParams: { format: "MP4" } });
-        downloadArtifacts(mp4, "mp4"); d.setStatus("done"); d.setStatusText(localize("exportComplete")); await finish(localize("exportComplete")); notify(localize(srt ? "exportVideoAndSrtComplete" : "exportComplete", { format: "MP4" }));
-        return { status: "success", extension: "mp4", byteSize: mp4.size, actualPipeline };
+        const artifact = await downloadArtifacts(mp4, "mp4");
+        d.setStatus("done"); d.setStatusText(localize("exportComplete")); await finish(localize("exportComplete")); notify(localize(srt ? "exportVideoAndSrtComplete" : "exportComplete", { format: "MP4" }));
+        return { status: "success", ...artifact, actualPipeline };
       } catch (error) {
         if (isExportAbortError(error)) throw error;
-        console.error(error); progress({ progress: 99, phaseKey: "exportWebmFallbackSaving" }); downloadArtifacts(video.blob, "webm");
+        console.error(error); progress({ progress: 99, phaseKey: "exportWebmFallbackSaving" });
+        const artifact = await downloadArtifacts(video.blob, "webm");
         const fallbackComplete = localize("exportWebmFallbackComplete");
         d.setStatus("done"); d.setStatusText(fallbackComplete); await finish(fallbackComplete); notify(localize("exportWebmFallbackNotice"));
-        return { status: "success", extension: "webm", byteSize: video.blob.size, actualPipeline };
+        return { status: "success", ...artifact, actualPipeline };
       }
     } catch (error) {
       if (isExportAbortError(error)) {
@@ -254,6 +304,7 @@ export function useVideoExport(d) {
         return { status: "failed", actualPipeline, error: message };
       }
     } finally {
+      options.signal?.removeEventListener("abort", abortFromCaller);
       if (d.exportAbortControllerRef.current === controller) d.exportAbortControllerRef.current = null;
       d.setExporting(false); d.setExportProgress(0);
     }

@@ -4,9 +4,9 @@
     {
       "name": "edit-timeline-studio-browser",
       "type": "skill-md",
-      "description": "Inspect, preview, and apply supported timeline edits in the user's open Timeline Studio browser editor using its registered WebMCP page tools. Use for live project inspection, main-visual reordering, basic source trimming, playhead seeking, undoing an agent edit, and saving a project copy.",
+      "description": "Use native WebMCP tools to edit the project open in Timeline Studio. Inspect clips and available assets, preview and apply timeline/caption/audio/marker edits, insert media and overlays, undo, save an editable project, or export video with progress and cancellation. Use for the live browser editor, not local project-file editing.",
       "url": "/.well-known/agent-skills/edit-timeline-studio-browser/SKILL.md",
-      "digest": "sha256:f3a2d3fbc25c2b3f55c22d9835e47602b56ab97f66dd8921c089f3a3b20fb3bc"
+      "digest": "sha256:41c534bed17faa1987ef734930ba34a129ffa7f7bc8b32f74f2c88aad5733428"
     }
   ]
 }

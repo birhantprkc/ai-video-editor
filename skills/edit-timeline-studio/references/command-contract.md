@@ -82,4 +82,4 @@ On failure, return `ok: false`, a stable error `code`, a human-readable `message
 
 ## Architectural rule
 
-Do not implement CLI and MCP editing separately. The bundled MCP server must remain a thin transport over the CLI's single command registry, pure project-state reducers, and shared validation. The browser WebMCP reorder/trim adapter now compiles its reviewed plans into this same engine, integrates the editor’s ripple helpers, and commits through normal history. Expand shared coverage instead of copying reducers into another transport.
+Do not implement CLI and MCP editing separately. The bundled MCP server must remain a thin transport over the CLI's single command registry, pure project-state reducers, and shared validation. The browser WebMCP adapter compiles reviewed multi-track operation plans and legacy reorder/trim plans into this same engine, restores media only from trusted editor snapshots, integrates ripple helpers, and commits through normal history. Browser export jobs use the real editor export hook and cancellation controller. Expand shared coverage instead of copying reducers or renderers into another transport.

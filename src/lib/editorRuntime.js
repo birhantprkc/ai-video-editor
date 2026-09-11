@@ -18,6 +18,7 @@ export function shouldCorrectPreviewMediaTime({ isPlaying, currentTime, targetTi
 }
 
 export function getAudioSegmentPreviewVolume(segment, timelineTime) {
+  if (segment.muted === true) return 0;
   const volume = Math.max(0, Math.min(4, segment.volume ?? 1));
   const localTime = Math.max(0, Math.min(segment.duration, timelineTime - segment.start));
   const fadeIn = Math.max(0, Math.min(segment.duration, segment.fadeIn || 0));

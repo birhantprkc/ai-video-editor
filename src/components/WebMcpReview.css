@@ -43,3 +43,22 @@
   .webmcp-review footer button { min-height: 40px; }
 }
 @media (prefers-reduced-motion: reduce) { .webmcp-review-spinner { animation: none; } }
+.webmcp-review-section { margin: 14px 0 0; }
+.webmcp-review-section h3 { margin: 0 0 4px; color: #b9cbd5; font-size: 11px; font-weight: 600; }
+.webmcp-review-item-heading { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.webmcp-review-item-heading .webmcp-review-name { flex: 1; }
+.webmcp-review-badge { flex: none; font-size: 10px; font-weight: 500; color: #a5c7d1; }
+.webmcp-review-badge-added { color: #80dfbd; }
+.webmcp-review-badge-removed { color: #e8ac9d; }
+.webmcp-review-fields { margin: 0; font-size: 11px; }
+.webmcp-review-field { display: grid; grid-template-columns: minmax(72px, .7fr) minmax(0, 1.7fr); align-items: baseline; gap: 6px 12px; padding: 4px 0; }
+.webmcp-review-field dt { min-width: 0; color: #8ea3b2; overflow-wrap: anywhere; }
+.webmcp-review-field dd { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; min-width: 0; margin: 0; color: #cbd9e0; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.webmcp-review-before, .webmcp-review-after { min-width: 0; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; }
+.webmcp-review-before { color: #a7b4bd; }
+.webmcp-review-after { color: #d8e9ec; }
+.webmcp-review-arrow { flex: none; color: #7395a0; }
+.webmcp-review-empty { color: #7f929e; }
+.webmcp-review-object { display: inline-flex; flex-direction: column; gap: 2px; }
+.webmcp-review-object-label { color: #8ea3b2; }
+.webmcp-review-sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }

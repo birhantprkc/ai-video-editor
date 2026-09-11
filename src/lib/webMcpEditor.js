@@ -1,5 +1,8 @@
-import { inspectClip, inspectProject, inspectTrack, inspectTranscript } from "./projectCommandEngine.js";
-import { browserProjectFingerprint, buildBrowserTimelineReview, getBrowserPlanningClips } from "./browserEditPlan.js";
+import { inspectClip, inspectMarkers, inspectProject, inspectTrack, inspectTranscript } from "./projectCommandEngine.js";
+import { browserProjectFingerprint, buildBrowserOperationReview, buildBrowserTimelineReview, getBrowserPlanningClips } from "./browserEditPlan.js";
+import { WEB_MCP_EDIT_CAPABILITIES, WEB_MCP_OPERATION_SCHEMA } from "./webMcpOperationSchema.js";
+import { browserAssetSummary, browserReviewDiff, browserReviewEntities } from "./webMcpProjectData.js";
+import { createWebMcpExportJobs, WEB_MCP_EXPORT_SETTINGS_SCHEMA } from "./webMcpExportJobs.js";
 
 const TRACKS = ["visuals", "overlays", "audio", "captions", "stickers", "music"];
 const MAX_PAGE = 100;
@@ -11,6 +14,14 @@ const ERROR_KEYS = {
   STALE_STATE: "stale", EDITOR_BUSY: "busy", PREVIEW_NOT_FOUND: "missingPreview",
   UNDO_NOT_AVAILABLE: "missingUndo", NO_CHANGES: "noChanges", CANCELLED: "cancelled",
   EMPTY_PROJECT: "emptyProject", SESSION_CLOSED: "unavailable",
+  ASSET_NOT_FOUND: "assetUnavailable", ASSET_NOT_READY: "assetNotReady", ASSET_UNAVAILABLE: "assetUnavailable",
+  BROWSER_EDIT_INVALID_OPERATION: "invalidOperation", UNSUPPORTED_OPERATION: "invalidOperation",
+  EXPORT_JOB_NOT_FOUND: "exportNotFound", EXPORT_JOB_LIMIT: "busy", EXPORT_FAILED: "exportFailed",
+  EXPORT_PREVIEW_NOT_FOUND: "exportStale", EXPORT_UNAVAILABLE: "exportUnavailable",
+  MARKER_NOT_FOUND: "notFound", MARKER_ALREADY_EXISTS: "invalidInput", CLIP_ALREADY_EXISTS: "invalidInput",
+  INVALID_RANGE: "invalidInput", UNSUPPORTED_TRACK: "invalidOperation", UNSUPPORTED_PROPERTY: "invalidOperation",
+  BROWSER_EDIT_ASSET_UNAVAILABLE: "assetUnavailable", BROWSER_EDIT_MULTIPLE_MUSIC_SOURCES: "invalidOperation",
+  BROWSER_EDIT_MUSIC_OVERLAP: "invalidOperation",
 };
 const fail = (code) => { throw Object.assign(new Error(code), { code }); };
 const object = (value, keys) => {
@@ -33,7 +44,7 @@ function page(items, input) {
 
 // Expose metadata deliberately, never media bytes, blob URLs, model state, or credentials.
 function properties(clip) {
-  const fields = ["type", "name", "start", "end", "duration", "text", "volume", "muted", "playbackRate", "sourceKind", "layer", "hidden"];
+  const fields = ["type", "name", "start", "end", "duration", "text", "volume", "fadeIn", "fadeOut", "muted", "playbackRate", "sourceKind", "layer", "lane", "hidden", "sourceAudioDisabled", "sourceAudioUnmapped"];
   return {
     ...Object.fromEntries(fields.filter((key) => ["string", "boolean", "number"].includes(typeof clip[key])).map((key) => [key, clip[key]])),
     speedCurveEnabled: Boolean(clip.speedCurve?.enabled),
@@ -51,6 +62,9 @@ export function createWebMcpEditorSession(getEditor, { publish = () => {}, commi
   let pending = null;
   let undoReceipt = null;
   let lastApplied = null;
+  let exportPreview = null;
+  const exportRequests = new Map();
+  const exportJobs = createWebMcpExportJobs(getEditor, { makeId });
   const mediaIds = new WeakMap();
   let mediaSequence = 0;
   const identity = (value) => {
@@ -58,11 +72,15 @@ export function createWebMcpEditorSession(getEditor, { publish = () => {}, commi
     if (!mediaIds.has(value)) mediaIds.set(value, ++mediaSequence);
     return mediaIds.get(value);
   };
+  const runtimeProject = (editor, project) => editor.getRuntimeProject?.() || { ...project, ...Object.fromEntries([
+    "visualSegments", "visualOverlaySegments", "audioSegments", "musicSegments", "musicBlob", "musicUrl", "musicPeaks", "sourceAudioBlob", "audioBlob",
+  ].filter((key) => key in editor).map((key) => [key, editor[key]])) };
   const fingerprint = (editor, project) => JSON.stringify({
-    project: browserProjectFingerprint(project, editor.rippleEditing, editor.visualSegments),
+    project: browserProjectFingerprint(project, editor.rippleEditing, editor.visualSegments, runtimeProject(editor, project)),
     historyVersion: editor.historyVersion,
     media: [...(editor.audioSegments || []), ...(editor.visualOverlaySegments || [])].map((clip) => [clip.id, identity(clip.blob), clip.url || clip.src]),
     sourceAudio: identity(editor.sourceAudioBlob), music: identity(editor.musicBlob), audio: identity(editor.audioBlob),
+    assets: (editor.assets || []).map((asset) => [asset.id, asset.assetId, asset.type, asset.kind, asset.name, asset.duration, asset.width, asset.height, asset.preparing, identity(asset.blob), asset.src]),
   });
   const capture = () => {
     if (closed) fail("SESSION_CLOSED");
@@ -75,7 +93,7 @@ export function createWebMcpEditorSession(getEditor, { publish = () => {}, commi
   const guard = (signal, editing = false) => {
     if (closed) fail("SESSION_CLOSED");
     if (signal?.aborted) fail("CANCELLED");
-    if (editing && (pointerActive || getEditor().isBusy?.())) fail("EDITOR_BUSY");
+    if (editing && (pointerActive || getEditor().isBusy?.() || exportJobs.isRunning?.())) fail("EDITOR_BUSY");
   };
   const requireState = (state, token) => {
     if (text(token) !== state.stateToken) fail("STALE_STATE");
@@ -88,16 +106,35 @@ export function createWebMcpEditorSession(getEditor, { publish = () => {}, commi
       playhead: state.editor.currentTime, rippleEditing: Boolean(state.editor.rippleEditing),
       trackLocks: state.project.trackLocks, trackVisibility: state.project.trackVisibility,
       sourceAudio: { present: Boolean(state.editor.sourceAudioBlob), linked: state.project.sourceAudioLinked, start: state.project.sourceAudioStart, duration: state.project.sourceAudioDuration },
-      capabilities: { edit: ["visual.reorder", "visual.trim"], maxPlanClips: MAX_CLIPS, requiresPreview: true, projectSave: "download-timeline-archive", videoExport: false },
+      capabilities: {
+        edit: [...WEB_MCP_EDIT_CAPABILITIES], maxPlanClips: MAX_CLIPS, maxOperations: MAX_CLIPS,
+        requiresPreview: true, projectSave: "download-timeline-archive", videoExport: Boolean(state.editor.exportVideo),
+        assets: "existing-local-assets", exportRequiresPrepare: true,
+        timeUnits: { timeline: "seconds", source: "absolute source-media seconds", split: "clip-local seconds", volume: "multiplier (1 = 100%)", fades: "seconds" },
+      },
     };
   };
   const previewSummary = (draft) => ({
     previewId: draft.id, stateToken: draft.stateToken, hasChanges: draft.review.hasChanges,
     beforeDuration: draft.review.beforeDuration, afterDuration: draft.review.duration,
-    rows: draft.review.rows, diff: draft.review.diff,
+    rows: draft.review.rows, diff: browserReviewDiff(draft.review.diff),
+    entities: { before: browserReviewEntities(draft.before), after: browserReviewEntities(draft.review.project) },
   });
   const run = async (name, input = {}, { signal } = {}) => {
     const editor = getEditor();
+    // Polling and cancelling an export must remain available while an archive
+    // download or another asynchronous tool invocation is being prepared.
+    if (["timeline_export_inspect", "timeline_export_cancel"].includes(name)) {
+      try {
+        guard(signal);
+        object(input, ["jobId"]); text(input.jobId);
+        const result = name === "timeline_export_inspect" ? exportJobs.inspect(input) : exportJobs.cancel(input);
+        return { ok: true, ...result };
+      } catch (error) {
+        const code = error?.code || "FAILED";
+        return { ok: false, error: { code, message: editor.t(ERROR_KEYS[code] || "failed") } };
+      }
+    }
     if (busy) return { ok: false, error: { code: "EDITOR_BUSY", message: editor.t("busy") } };
     busy = true;
     try {
@@ -134,12 +171,32 @@ export function createWebMcpEditorSession(getEditor, { publish = () => {}, commi
           result = { ...metadata, stateToken: state.stateToken, ...page(transcript.segments, input) };
           break;
         }
+        case "timeline_assets_inspect": {
+          object(input, ["query", "type", "readyOnly", "offset", "limit"]);
+          if (input.query !== undefined && (typeof input.query !== "string" || input.query.length > 256)) fail("INVALID_ARGUMENT");
+          if (input.type !== undefined && !["image", "video", "audio"].includes(input.type)) fail("INVALID_ARGUMENT");
+          if (input.readyOnly !== undefined && typeof input.readyOnly !== "boolean") fail("INVALID_ARGUMENT");
+          const query = (input.query || "").toLocaleLowerCase();
+          const entries = (state.editor.assets || []).map(browserAssetSummary).filter((asset) =>
+            (!input.type || asset.type === input.type) && (!input.readyOnly || asset.status === "ready") && (!query || asset.name.toLocaleLowerCase().includes(query)));
+          result = { stateToken: state.stateToken, ...page(entries, input) };
+          break;
+        }
+        case "timeline_markers_inspect": {
+          object(input, ["markerId", "offset", "limit"]);
+          if (input.markerId !== undefined) text(input.markerId, 160);
+          const markers = inspectMarkers(state.project, input.markerId || "");
+          result = { stateToken: state.stateToken, ...page(markers.markers, input) };
+          break;
+        }
         case "timeline_edit_preview": {
-          object(input, ["stateToken", "clips", "summary"]);
+          object(input, ["stateToken", "clips", "operations", "summary"]);
           guard(signal, true);
           requireState(state, input.stateToken);
-          if (!Array.isArray(input.clips) || !input.clips.length || input.clips.length > MAX_CLIPS) fail("INVALID_ARGUMENT");
-          for (const clip of input.clips) {
+          if ((input.operations === undefined) === (input.clips === undefined)) fail("INVALID_ARGUMENT");
+          const plan = input.operations ?? input.clips;
+          if (!Array.isArray(plan) || !plan.length || plan.length > MAX_CLIPS) fail("INVALID_ARGUMENT");
+          for (const clip of input.clips || []) {
             object(clip, ["clipId", "sourceIn", "sourceOut"]);
             text(clip.clipId);
             if (clip.sourceIn !== undefined) finite(clip.sourceIn);
@@ -147,13 +204,44 @@ export function createWebMcpEditorSession(getEditor, { publish = () => {}, commi
             if ((clip.sourceIn === undefined) !== (clip.sourceOut === undefined)) fail("INVALID_ARGUMENT");
           }
           if (input.summary !== undefined && (typeof input.summary !== "string" || input.summary.length > 2000)) fail("INVALID_ARGUMENT");
-          const review = buildBrowserTimelineReview(state.project, input, {
+          const options = {
             visualSegments: state.editor.visualSegments, rippleEditing: state.editor.rippleEditing,
             hasMusic: Boolean(state.editor.musicBlob), hasSourceAudio: Boolean(state.editor.sourceAudioBlob),
-          });
-          pending = { id: makeId(), stateToken: state.stateToken, fingerprint: state.fingerprint, review };
+            runtimeProject: runtimeProject(state.editor, state.project), assets: state.editor.assets || [],
+          };
+          const review = input.operations ? buildBrowserOperationReview(state.project, input, options) : buildBrowserTimelineReview(state.project, input, options);
+          pending = { id: makeId(), stateToken: state.stateToken, fingerprint: state.fingerprint, before: review.beforeProject || state.project, review };
           publish({ status: "pending", preview: previewSummary(pending), summary: input.summary || "" });
           result = previewSummary(pending);
+          break;
+        }
+        case "timeline_export_prepare": {
+          object(input, ["stateToken", "settings"]);
+          guard(signal, true);
+          requireState(state, input.stateToken);
+          if (!state.editor.exportVideo) fail("EXPORT_UNAVAILABLE");
+          if (!state.editor.visualSegments?.length) fail("EMPTY_PROJECT");
+          const prepared = exportJobs.prepare({ settings: input.settings });
+          exportPreview = { id: makeId(), stateToken: state.stateToken, fingerprint: state.fingerprint, prepared };
+          result = { exportId: exportPreview.id, stateToken: state.stateToken, ...prepared };
+          break;
+        }
+        case "timeline_export_start": {
+          object(input, ["exportId", "requestId"]);
+          text(input.exportId); text(input.requestId);
+          const previous = exportRequests.get(input.requestId);
+          if (previous) {
+            if (previous.exportId !== input.exportId) fail("INVALID_ARGUMENT");
+            result = { ...exportJobs.inspect({ jobId: previous.jobId }), alreadyStarted: true };
+            break;
+          }
+          guard(signal, true);
+          if (!exportPreview || exportPreview.id !== input.exportId) fail("EXPORT_PREVIEW_NOT_FOUND");
+          if (exportPreview.fingerprint !== state.fingerprint) fail("STALE_STATE");
+          result = exportJobs.start({ stateToken: state.stateToken, settings: exportPreview.prepared.resolvedSettings, requestId: input.requestId }, { signal });
+          exportRequests.set(input.requestId, { exportId: input.exportId, jobId: result.jobId });
+          // Receipts match the task service's bound and are never silently
+          // forgotten while a retry could start another download.
           break;
         }
         case "timeline_edit_apply": {
@@ -231,7 +319,7 @@ export function createWebMcpEditorSession(getEditor, { publish = () => {}, commi
     dismiss() { pending = null; publish(null); },
     isCurrentPreview() { return Boolean(pending && pending.fingerprint === capture().fingerprint); },
     canUndo() { return Boolean(undoReceipt && undoReceipt.fingerprint === capture().fingerprint); },
-    close() { closed = true; pending = null; undoReceipt = null; },
+    close() { closed = true; pending = null; undoReceipt = null; exportPreview = null; exportJobs.close(); exportRequests.clear(); },
   };
 }
 
@@ -240,16 +328,28 @@ const pagination = { offset: { type: "integer", minimum: 0 }, limit: { type: "in
 const schema = (properties = {}, required = []) => ({ type: "object", properties, required, additionalProperties: false });
 
 export function createWebMcpTools(session, t) {
+  const editSchema = schema({
+    stateToken: stringSchema, summary: { type: "string", maxLength: 2000 },
+    clips: { type: "array", minItems: 1, maxItems: MAX_CLIPS, items: schema({ clipId: stringSchema, sourceIn: { type: "number", minimum: 0, description: t("sourceInDescription") }, sourceOut: { type: "number", minimum: 0, description: t("sourceOutDescription") } }, ["clipId"]) },
+    operations: { type: "array", minItems: 1, maxItems: MAX_CLIPS, items: WEB_MCP_OPERATION_SCHEMA },
+  }, ["stateToken"]);
+  editSchema.oneOf = [{ required: ["clips"] }, { required: ["operations"] }];
   const tools = [
     ["timeline_project_inspect", "Project", schema(), true],
     ["timeline_track_inspect", "Track", schema({ track: { type: "string", enum: TRACKS }, ...pagination }, ["track"]), true],
     ["timeline_clip_inspect", "Clip", schema({ clipId: stringSchema }, ["clipId"]), true],
     ["timeline_transcript_inspect", "Transcript", schema({ audioClipId: stringSchema, ...pagination }), true],
-    ["timeline_edit_preview", "Preview", schema({ stateToken: stringSchema, summary: { type: "string", maxLength: 2000 }, clips: { type: "array", minItems: 1, maxItems: MAX_CLIPS, items: schema({ clipId: stringSchema, sourceIn: { type: "number", minimum: 0, description: t("sourceInDescription") }, sourceOut: { type: "number", minimum: 0, description: t("sourceOutDescription") } }, ["clipId"]) } }, ["stateToken", "clips"]), false],
+    ["timeline_assets_inspect", "Assets", schema({ query: { type: "string", maxLength: 256 }, type: { type: "string", enum: ["image", "video", "audio"] }, readyOnly: { type: "boolean" }, ...pagination }), true],
+    ["timeline_markers_inspect", "Markers", schema({ markerId: { ...stringSchema, maxLength: 160 }, ...pagination }), true],
+    ["timeline_edit_preview", "Preview", editSchema, false],
     ["timeline_edit_apply", "Apply", schema({ previewId: stringSchema }, ["previewId"]), false],
     ["timeline_preview_seek", "Seek", schema({ time: { type: "number", minimum: 0, description: t("seekTimeDescription") } }, ["time"]), false],
     ["timeline_edit_undo", "Undo", schema({ transactionId: stringSchema }, ["transactionId"]), false],
     ["timeline_project_save", "Save", schema({ stateToken: stringSchema }, ["stateToken"]), false],
+    ["timeline_export_prepare", "ExportPrepare", schema({ stateToken: stringSchema, settings: WEB_MCP_EXPORT_SETTINGS_SCHEMA }, ["stateToken"]), true],
+    ["timeline_export_start", "ExportStart", schema({ exportId: stringSchema, requestId: stringSchema }, ["exportId", "requestId"]), false],
+    ["timeline_export_inspect", "ExportInspect", schema({ jobId: stringSchema }, ["jobId"]), true],
+    ["timeline_export_cancel", "ExportCancel", schema({ jobId: stringSchema }, ["jobId"]), false],
   ];
   return tools.map(([name, key, inputSchema, readOnlyHint]) => ({
     name, title: t(`tool${key}Title`), description: t(`tool${key}Description`), inputSchema,

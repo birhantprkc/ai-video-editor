@@ -1,3 +1,5 @@
+import { WEBMCP_EXTENDED_COPY } from "./i18nWebMcpExtended.js";
+
 // WebMCP review UI and tool metadata have direct copy in all 13 interface languages.
 export const WEBMCP_COPY = {
   en: {
@@ -222,6 +224,8 @@ export const WEBMCP_COPY = {
     toolSaveTitle: "Unduh salinan proyek", toolSaveDescription: "Menyimpan proyek yang telah dibaca sebagai file .timeline portabel baru melalui unduhan browser menggunakan stateToken. Tidak merender video atau mengunggah media.",
   },
 };
+
+for (const [locale, copy] of Object.entries(WEBMCP_EXTENDED_COPY)) Object.assign(WEBMCP_COPY[locale], copy);
 
 export function createWebMcpTranslator(language) {
   const locale = String(language || "en").toLowerCase().split(/[-_]/)[0];

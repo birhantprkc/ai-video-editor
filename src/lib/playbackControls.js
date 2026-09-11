@@ -7,7 +7,7 @@ import { requestLatestVideoFrame } from "./videoFrameSync.js";
 
 export function createPlaybackControls(deps) {
   const isTrackAudible = (track) => deps.trackVisibility?.[track] !== false;
-  const getSourceState = (timelineTime) => deps.sourceAudioLinked && deps.linkedSourceAudioSegments?.length
+  const getSourceState = (timelineTime) => deps.sourceAudioLinked
     ? getLinkedSourceAudioState(deps.linkedSourceAudioSegments, timelineTime)
     : {
         active: isTimelineTimeInsideTrack(timelineTime, deps.sourceAudioStart, deps.sourceAudioDuration),

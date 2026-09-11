@@ -16,7 +16,7 @@
 ## Available to an Agent today
 
 - Repository inspection and code changes
-- Native browser WebMCP tools for the open project: structured reads, preview seeking, reviewed main-visual reorder and eligible 1× source trims, guarded undo, and a new `.timeline` browser download
+- Fifteen native browser WebMCP tools for the open project: project/asset/marker inspection, preview seeking, reviewed caption/audio/marker changes, supported main-visual split/delete/duplicate/reorder/trim, existing-asset and picture-in-picture insertion, guarded undo, editable `.timeline` downloads, and real video export with prepared settings, progress receipts and cancellation
 - Browser-driven operation of the running editor
 - Import and export through visible file controls
 - Pure timeline helper functions in `src/lib/`

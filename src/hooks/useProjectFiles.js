@@ -13,12 +13,13 @@ export function useProjectFiles(deps) {
     const visualSegments = deps.visualSegments.map(({ blob, trackFrames, src, cutoutVisual, enhancement: _enhancement, ...segment }) => segment);
     const visualOverlaySegments = deps.visualOverlaySegments.map(({ blob, src, ...segment }) => segment);
     const audioSegments = deps.audioSegments.map(({ blob, url, peaks, ...segment }) => segment);
+    const musicSegments = deps.musicSegments.map(({ blob: _blob, src: _src, url: _url, peaks: _peaks, ...segment }) => segment);
     return {
       script: deps.script, commandState: commandStateRef.current, selectedVoiceId: deps.selectedVoiceId, speed: deps.speed, volume: deps.volume,
       ratioId: deps.ratioId, fitMode: deps.fitMode, captionPosition: deps.captionPosition,
       captionPlacement: deps.captionPlacement, captionSize: deps.captionSize, captionStyle: deps.captionStyle,
       captionStylePresetId: deps.captionStylePresetId, captionStylePresets: deps.captionStylePresets,
-      captionsEnabled: deps.captionsEnabled, captionSegments: deps.captionSegments, audioSegments, musicSegments: deps.musicSegments, visualSegments, visualOverlaySegments,
+      captionsEnabled: deps.captionsEnabled, captionSegments: deps.captionSegments, audioSegments, musicSegments, visualSegments, visualOverlaySegments,
       stickerSegments: deps.stickerSegments, selectedFilterId: deps.selectedFilterId,
       timelineMarkers: normalizeTimelineMarkers(deps.timelineMarkers),
       selectedTransitionId: deps.selectedTransitionId, selectedStickerId: deps.selectedStickerId,

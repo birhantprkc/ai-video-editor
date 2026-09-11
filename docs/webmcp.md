@@ -1,6 +1,6 @@
 # WebMCP integration
 
-Timeline Studio exposes the project open in the editor as structured browser tools. Agents can inspect the current timeline, review a basic visual edit, apply the reviewed plan, seek the preview, undo their last unchanged edit, and download a new editable `.timeline` copy. The root URL continues to open the editor directly.
+Timeline Studio exposes the project open in the editor as 15 structured browser tools. Agents can inspect the timeline and available assets, review and apply supported multi-track edits, seek and undo, save an editable `.timeline` copy, and run a real browser video export with progress and cancellation. The root URL continues to open the editor directly.
 
 This is a progressive enhancement for browsers and agent hosts that provide a compatible WebMCP API. Unsupported browsers keep the normal editor. Registration is not proof that a particular agent host can discover or invoke tools. WebMCP is experimental; the current [specification](https://webmachinelearning.github.io/webmcp/) is a Community Group draft, not a W3C Standard.
 
@@ -8,10 +8,10 @@ This is a progressive enhancement for browsers and agent hosts that provide a co
 
 | Path | Project being edited | Execution and output |
 | --- | --- | --- |
-| Browser WebMCP | The live project in the open tab | Shared editor state, visible review, one undoable transaction; optional browser download of a new `.timeline` copy |
+| Browser WebMCP | The live project in the open tab | Shared editor state, semantic review, one undoable edit transaction; browser downloads of a `.timeline` copy or rendered video |
 | Local STDIO MCP / CLI | A local `.timeline` archive | Repository command runner, revisioned diff/apply, new output archive; supported headless rendering subset |
 
-The local server remains inside [`skills/edit-timeline-studio`](../skills/edit-timeline-studio). Neither path implements a second timeline engine. Browser plans compile to the existing shared command engine and use the editor's ripple and history integration. The website does not host a remote HTTP MCP server, OAuth service, or media-upload endpoint for this integration.
+The local server remains inside [`skills/edit-timeline-studio`](../skills/edit-timeline-studio). Neither path implements a second timeline engine. Browser plans compile to the existing shared command engine and use the editor's ripple and history integration. Video export uses the same rendering hook, progress UI and cancellation controller as the editor's Export button. The website does not host a remote HTTP MCP server, OAuth service, or media-upload endpoint for this integration.
 
 ## Runtime registration
 
@@ -25,59 +25,100 @@ Discover the current page schemas before invoking tools. Browser tools share som
 
 | Tool | Input | Result or effect |
 | --- | --- | --- |
-| `timeline_project_inspect` | `{}` | Current project summary, supported editing subset and opaque `stateToken` |
-| `timeline_track_inspect` | `track`, optional `offset`, `limit` | Track metadata and paginated clip summaries; `visuals` includes source ranges and trim eligibility |
-| `timeline_clip_inspect` | `clipId` | Clip properties, timing, source range and `trimAllowed` for eligible main visuals |
-| `timeline_transcript_inspect` | Optional `audioClipId`, `offset`, `limit` | Existing serialized caption text and timing; this does not run speech recognition |
-| `timeline_edit_preview` | `stateToken`, complete `clips` order, optional `summary` | Semantic changes and a `previewId`; the timeline is unchanged |
-| `timeline_edit_apply` | `previewId` | Applies that exact pending plan as one undoable transaction and returns `transactionId` |
+| `timeline_project_inspect` | `{}` | Project summary, current editing capabilities, opaque `stateToken` |
+| `timeline_track_inspect` | `track`, optional `offset`, `limit` | Paginated clip metadata; `visuals` includes source ranges and trim eligibility |
+| `timeline_clip_inspect` | `clipId` | Clip properties, timing, and main-visual editing eligibility |
+| `timeline_transcript_inspect` | Optional `audioClipId`, `offset`, `limit` | Existing caption text and timing; does not run speech recognition |
+| `timeline_assets_inspect` | Optional `query`, `type`, `readyOnly`, `offset`, `limit` | Available asset metadata, readiness, `assetId`, and `insertableTracks`; no media bytes or URLs |
+| `timeline_markers_inspect` | Optional `markerId`, `offset`, `limit` | Point/range markers, chapters and notes |
+| `timeline_edit_preview` | `stateToken`, either `operations` or legacy `clips`, optional `summary` | Semantic changes and `previewId`; the timeline is unchanged |
+| `timeline_edit_apply` | `previewId` | Applies that exact pending plan as one undoable transaction; returns `transactionId` |
 | `timeline_preview_seek` | `time` in timeline seconds | Pauses playback and seeks within the project duration |
-| `timeline_edit_undo` | `transactionId` | Reverts the last agent transaction only while the project is unchanged |
-| `timeline_project_save` | `stateToken` | Downloads a new portable `.timeline` project copy through the browser; does not render video |
+| `timeline_edit_undo` | `transactionId` | Reverts the latest agent transaction only while the project is unchanged |
+| `timeline_project_save` | `stateToken` | Downloads a new portable `.timeline` project copy; does not render video |
+| `timeline_export_prepare` | `stateToken`, optional `settings` | Validates settings, freezes the export plan, returns `exportId`, `resolvedSettings`, range, technical summary and estimate; starts no rendering |
+| `timeline_export_start` | `exportId`, `requestId` | Revalidates the project, starts the reviewed export, quickly returns `jobId` and current status |
+| `timeline_export_inspect` | `jobId` | Progress, status, reviewed settings and actual output receipt or failure |
+| `timeline_export_cancel` | `jobId` | Requests cancellation through the real exporter; inspect until it acknowledges completion |
 
-Track names are `visuals`, `overlays`, `audio`, `captions`, `stickers`, and `music`. Source-audio presence and link state are reported in the project summary; a separate source-audio track read is not exposed. For paginated reads, the default limit is 50 and the maximum is 100; follow `nextOffset` until it is null. Edit plans accept at most 500 main-visual clips.
+Track names are `visuals`, `overlays`, `audio`, `captions`, `stickers`, and `music`. Source-audio presence and link state are reported in the project summary; a separate source-audio track read is not exposed. Paginated reads default to 50 entries, with a maximum of 100; follow `nextOffset` until null. A preview accepts at most 500 operations or 500 legacy main-visual entries, and never both payload forms.
 
-Transcript filtering follows a caption's active audio link, or its remembered source when no active link exists. Results keep these distinct: `audioClipId` is the active movement link and `detachedAudioClipId` is the remembered source. Querying a transcript never relinks captions. Project saving also supports projects containing only overlays, stickers, or audio.
+Transcript filtering follows a caption's active audio link, or its remembered source when no active link exists. `audioClipId` is the active movement link and `detachedAudioClipId` is the remembered source. Querying a transcript never relinks captions. Project saving also supports projects containing only overlays, stickers, or audio; video rendering requires a usable main visual.
 
-`stateToken`, `previewId`, and `transactionId` are opaque values returned by the live session. Do not construct them or reuse them after reloading the page. Tool results include success or structured failure information; never infer success merely from a completed invocation.
+`stateToken`, `previewId`, `transactionId`, `exportId` and `jobId` are session-issued opaque values. Do not construct them or reuse them after reloading. In contrast, an export `requestId` is a caller-chosen unique retry key; reuse it for retries of that same export start. Tool results include success or structured failure information; a completed invocation does not establish successful editing or rendering.
 
-## Review and apply
+## Reviewed editing operations
 
-1. Inspect the project and retain its current `stateToken`. Read all pages of `timeline_track_inspect` with `track: "visuals"` for the complete clip list and source ranges. Inspect individual clips when eligibility needs clarification.
-2. Submit every existing main-visual `clipId` exactly once, in the desired order. Omitting a clip is invalid; the first version does not expose deletion, insertion or duplication.
-3. For a supported trim, provide both `sourceIn` and `sourceOut` in absolute source-media seconds, inside the clip's currently retained range. Omit both to retain the clip's existing source mapping.
-4. Read the returned semantic changes and warnings. The editor displays the same pending plan, with Apply and Dismiss controls. Previewing a plan does not apply it.
-5. When applying is within the user's request, invoke `timeline_edit_apply` with only the returned `previewId`, or let the user apply it in the editor. Do not resubmit a different operation list during apply.
-6. Inspect the resulting project and seek across affected boundaries. Download a new project copy when the user requested an editable artifact.
+Use `operations` for targeted or combined edits. Operations run in order on a temporary project, then appear as one reviewed transaction. Existing clip, marker and asset IDs must come from inspection. Supply distinct new clip or marker IDs for additions; a later operation in the same plan can refer to an ID created by an earlier one.
 
-For a project containing `clip-a` with source range 10–16 seconds and `clip-b` with source range 0–4 seconds, a plan that moves B first and shortens A to source seconds 11–15 is:
+| Operation | Parameters and limits |
+| --- | --- |
+| `caption.add` | New `clipId`, `text`, timeline `start`/`end` spanning at least 0.2 seconds; optional existing `audioClipId`. Enables captions and preserves existing caption timing |
+| `caption.update` | Existing `clipId`, any requested `text`, `start`, `end` changes; the resulting range must span at least 0.2 seconds |
+| `caption.delete` | Existing caption `clipId` |
+| `clip.set_property` | Audio or music `clipId`, `property` of `volume`, `fadeIn`, or `fadeOut`, and numeric `value`; volume is a 0–4 multiplier, fades are seconds bounded by the clip duration |
+| `clip.set_muted` | Existing `clipId` and boolean `muted` |
+| `marker.add`, `marker.update`, `marker.delete` | `markerId`; additions need `time`. Optional `markerType` is `marker`, `chapter`, `range`, or `note`; range markers use `endTime`. Titles, notes and supported colors are editable |
+| `visual.split` | Main-visual `clipId`, `at` seconds **from that clip's start**, and a new `rightClipId`; both pieces must retain valid duration and supported source timing |
+| `visual.delete` | Main-visual `clipId`; closes the main sequence's gap |
+| `visual.duplicate` | Main-visual `clipId`, new `newClipId`, optional zero-based `atIndex` |
+| `visual.reorder` | Main-visual `clipId`, zero-based `toIndex` |
+| `visual.trim` | Eligible video `clipId`, `sourceIn` and `sourceOut` in **absolute original-source seconds**, within the currently retained range |
+| `visual.insert` | New `clipId`, zero-based `atIndex`, either an inspected `assetId` or a supported existing `sourceClipId`; optional `duration` |
+| `overlay.add` | New `clipId`, timeline `start`, either `assetId` or `sourceClipId`; optional `duration`, `layer`, `muted`, `transform` |
+| `asset.insert` | Inspected `assetId`, new `clipId`, destination `track`; main visuals use `atIndex`, timed tracks use `start`. Optional duration, lane/layer, muting and overlay transform depend on the destination |
+
+For overlay insertion, `transform` can set `x`, `y`, `scale`, `rotation` and `opacity`; discover the schema for numeric bounds. Main-track indices are zero-based. Overlay and requested audio layers are one-based. Inserting an asset references media already available in the editor; it does not fetch an arbitrary URL or read an arbitrary local path. Read `status` and `insertableTracks` first. AI Music assets belong on Music, not a voice lane. Music insertion respects the current single-source music model and rejects incompatible additional sources or overlapping music pieces.
+
+Splitting and source trimming reject unsupported speed curves, reversal, transitions, keyframes, effects and processed-media mappings rather than approximating them. Check the reported eligibility and returned errors. Reordering and duplication preserve retained media identity and source mapping. Markers remain annotations: their end times do not extend rendered content duration.
+
+### Example: remove an interior section, correct a caption, and lower music
+
+Given an eligible eight-second main visual `clip-b`, the following removes its seconds 2–4. The second split is relative to the newly created right piece. IDs shown here are illustrative and must be resolved or allocated for the real project.
 
 ```json
 {
   "stateToken": "<from timeline_project_inspect>",
-  "summary": "Move the second clip first and shorten the ending.",
-  "clips": [
-    { "clipId": "clip-b" },
-    { "clipId": "clip-a", "sourceIn": 11, "sourceOut": 15 }
+  "summary": "Remove the two-second aside, correct the caption and lower the music.",
+  "operations": [
+    { "type": "visual.split", "clipId": "clip-b", "at": 2, "rightClipId": "new-middle" },
+    { "type": "visual.split", "clipId": "new-middle", "at": 2, "rightClipId": "new-tail" },
+    { "type": "visual.delete", "clipId": "new-middle" },
+    { "type": "caption.update", "clipId": "caption-a", "text": "Corrected caption." },
+    { "type": "clip.set_property", "clipId": "music-a", "property": "volume", "value": 0.2 }
   ]
 }
 ```
 
-This is an example shape, not real project IDs. Apply with `{ "previewId": "<from timeline_edit_preview>" }` only after inspecting that project's returned diff.
+Read the returned semantic diff, including ripple changes on other tracks, before applying `{ "previewId": "<returned previewId>" }`. Inspect the resulting project and seek across the changed boundaries. If the user requested only a proposal, leave the plan unapplied.
 
-## Supported edits and safeguards
+### Legacy complete-order plans
 
-- Reorder the existing complete main-visual sequence while preserving clip identity and media. The primary track remains contiguous.
-- Shorten eligible plain 1× video clips within their current source range. Read `trimAllowed`; do not assume a video is eligible. Images, retimed/reversed clips, transitions, animation/keyframes, effects, subject analysis, and processed-media state can prevent trimming. Complex clips can retain their source mapping when reordered.
-- Reuse the timeline's current ripple mode for duration changes. Preserve active caption/audio associations and source-audio behavior, and protect locked tracks. Turning ripple off preserves independent tracks' absolute timing.
-- Compare a live project fingerprint before apply. It includes changes made through the editor and media identity, rather than relying solely on the command runner's revision number. A concurrent edit invalidates the plan; inspect and preview again.
-- Keep edits inside normal editor history. Tool-based undo checks that the last agent transaction still matches the live project and does not undo intervening user work. The normal editor history remains available.
-- Reject edits while incompatible editor activity is in progress. Cancellation or a rejected precondition must not report a successful edit.
+The existing `clips` form remains supported for complete main-track reorder and basic trim plans. Every current main-visual `clipId` must appear exactly once. Each entry is `{ "clipId": "..." }` or `{ "clipId": "...", "sourceIn": 11, "sourceOut": 15 }`. Omit both source bounds to preserve the existing source mapping. Omitting an existing clip is invalid in this form; use explicit `visual.delete` in `operations` for deletion.
 
-The first version does not expose arbitrary JavaScript, asset import, model downloads, AI generation, cloud jobs, advanced effects, or rendered-video export. Existing editor workflows still provide those capabilities under their own controls.
+## Export a finished video
 
-## Discovery and data
+1. Inspect the current project and call `timeline_export_prepare` with its `stateToken` and the requested settings. Review the returned actual range, resolution, frame rate, codecs, audio/caption delivery and estimated size.
+2. For an authorized export, call `timeline_export_start` with that `exportId` and a unique `requestId`. If the response is lost or uncertain, retry with the same pair. The prepared project must still be unchanged; otherwise inspect and prepare again.
+3. Inspect the returned `jobId` while rendering continues. The shared editor export dialog reports progress and also permits cancellation. Export inspection and cancellation remain callable while editing is blocked by export activity.
+4. Treat `succeeded` as an export result only after examining `result.extension`, `byteSize`, `actualPipeline` and `formatFallback`. `downloadTriggered` means the browser download was initiated, not that the host has verified a file on disk. Verify the downloaded artifact when the host exposes it.
+
+Settings use the existing editor profiles: resolution `"720"`, `"1080"`, `"1440"` or `"2160"`; frame rate 24, 30 or 60; codec `h264` (MP4), `h264-mov` (MOV), `vp9` or `vp8` (WebM); pipeline `auto`, `deterministic` or `compatible`; audio `mix` or `none`; and captions `burned`, `none` or `burned-srt`. Full schema discovery also exposes quality, audio/video bitrate, file name, keyframe interval, and custom range fields. Invalid values and out-of-bounds custom ranges are rejected. MOV uses the deterministic pipeline and rejects an explicit compatible-pipeline request. Prepare resolves defaults once; subsequent UI preference changes do not silently replace the reviewed settings.
+
+Jobs report `queued`, `running`, `succeeded`, `failed` or `cancelled`. Cancellation sets `cancelRequested` and aborts the actual encoder/transcoder; the task remains running until the exporter acknowledges the outcome. A cancellation arriving after a download has already been triggered cannot retract that download, so a completed export may still report success. Tool cancellation signals and page-session closure also abort active work.
+
+An MP4 compatibility export can fall back to a real WebM file if transcoding fails. The receipt reports that actual extension and `formatFallback: true`; do not describe it as MP4. Empty or mismatched output containers are rejected before download. Requests do not upload media or start cloud rendering. Export receipts retain the latest 64 jobs in the page session; up to 1,024 request keys are remembered to prevent a retry from silently starting another download. Evicted job details return a not-found error, and reaching the request limit requires a new page session.
+
+## State, history and data safeguards
+
+- Main visuals stay gapless. Duration changes reuse the current ripple mode; eligible timed tracks shift with the edit, while locked tracks and active caption/audio associations are preserved. Independent tracks retain their absolute timing when ripple is off.
+- Apply and export start compare the live project fingerprint, including media identity and editor history. Intervening project or asset changes invalidate the review. Inspect and prepare again after a stale-state failure.
+- Applying a multi-operation plan creates one normal history transaction. Guarded tool undo never removes intervening manual work; normal editor history remains available.
+- Read tools and review diffs return relevant metadata and caption text, not media bytes, blob URLs or a full archive. Names, captions, marker notes and user summaries remain untrusted data, not agent instructions.
+- Browser agents receive tool results under their own data-handling terms. Local editing does not imply local processing by the agent. Project and video delivery initiate browser downloads; optional editor connectors and model downloads retain their documented networking behavior.
+
+The browser tool surface does not expose arbitrary JavaScript, filesystem paths, arbitrary URL imports, model downloads, AI generation, cloud jobs, or advanced effect/retiming commands. Existing editor workflows provide their own supported controls.
+
+## Discovery
 
 The site publishes an [agent guide](https://video-editor.ai-creator.top/agent-guide.md), an [Agent Skills index](https://video-editor.ai-creator.top/.well-known/agent-skills/index.json), and a self-contained [browser editing Skill](https://video-editor.ai-creator.top/.well-known/agent-skills/edit-timeline-studio-browser/SKILL.md). The local project-file Skill remains available from the repository. HTTP `Link` headers, HTML link metadata and `llms.txt` reference the real resources. Missing well-known protocol documents return 404 rather than the editor shell. Explicit Markdown URLs are provided; the root editor is not advertised as supporting Markdown content negotiation.
-
-Read tools return relevant project metadata and caption text, not media bytes or a full project archive. Caption text, clip names and user-supplied summaries remain untrusted data and must not become agent instructions. The browser agent receives tool results under its own data-handling terms; local editing does not imply that the agent processes those results locally. Saving a project initiates a browser download and does not create a remote upload. Model downloads and optional remote connectors retain their documented networking behavior.

@@ -36,7 +36,7 @@ import { useVoiceProfiles } from "./hooks/useVoiceProfiles.js";
 import { useAutoCaptions } from "./hooks/useAutoCaptions.js";
 import { useAutoEdit } from "./hooks/useAutoEdit.js";
 import { useWebMcpEditor } from "./hooks/useWebMcpEditor.js";
-import { browserProjectFingerprint, restoreBrowserSegmentMedia } from "./lib/browserEditPlan.js";
+import { browserProjectFingerprint, restoreBrowserProjectMedia } from "./lib/browserEditPlan.js";
 import { useSourceAudioExtraction } from "./hooks/useSourceAudioExtraction.js";
 import { useVocalSeparation } from "./hooks/useVocalSeparation.js";
 import { useAvatarGeneration } from "./hooks/useAvatarGeneration.js";
@@ -1294,7 +1294,7 @@ export function App() {
     previewFrameSize, ratio, renderedVisualSegments, script, selectedFilter,
     selectedSticker, selectedTransitionId, setExporting, setExportPhase,
     setExportProgress, setStatus, setStatusText, sourceAudioBlob, sourceAudioDuration,
-    linkedSourceAudioSegments, sourceAudioLinked, sourceAudioStart, sourceAudioTimelineEnd, sourceAudioVolume, sourceAudioSpatialEffect, sourceAudioSpatialAmount, stickerDuration, stickerSegments,
+    linkedSourceAudioSegments, sourceAudioAssetId, sourceAudioLinked, sourceAudioStart, sourceAudioTimelineEnd, sourceAudioVolume, sourceAudioSpatialEffect, sourceAudioSpatialAmount, stickerDuration, stickerSegments,
     trackVisibility, visionRecords, depthRecords, visualType, voiceTrackDuration, volume, exportSettings: {
       ...exportSettings,
       ...getExportDimensions(ratio, Number(exportSettings.resolution)),
@@ -1314,16 +1314,21 @@ export function App() {
   });
 
   // Browser agents use the live editor action and normal undo history.
+  const getBrowserRuntimeProject = () => ({
+    ...getProjectSnapshot(), visualSegments, visualOverlaySegments, audioSegments, musicSegments,
+    musicBlob, musicUrl, musicPeaks, sourceAudioBlob, sourceAudioUrl, audioBlob,
+  });
   const applyBrowserReview = (review, message) => {
     if (!review.hasChanges) throw Object.assign(new Error(), { code: "NO_CHANGES" });
-    if (review.fingerprint !== browserProjectFingerprint(getProjectSnapshot(), rippleEditing, visualSegments)) {
+    const snapshot = getProjectSnapshot();
+    const runtime = getBrowserRuntimeProject();
+    if (review.fingerprint !== browserProjectFingerprint(snapshot, rippleEditing, visualSegments, runtime)) {
       throw Object.assign(new Error(), { code: "BROWSER_EDIT_STALE_PLAN" });
     }
-    const firstChanged = review.rows.find((row) => row.changed);
-    const next = review.project;
-    const nextVisuals = restoreBrowserSegmentMedia(next.visualSegments, visualSegments);
-    const nextAudio = restoreBrowserSegmentMedia(next.audioSegments, audioSegments);
-    const nextOverlays = restoreBrowserSegmentMedia(next.visualOverlaySegments, visualOverlaySegments);
+    const firstChanged = review.rows?.find((row) => row.changed);
+    const next = restoreBrowserProjectMedia(review.project, runtime, review.mediaOrigins, userAssets);
+    const nextVisuals = next.visualSegments;
+    const visualsChanged = JSON.stringify(snapshot.visualSegments) !== JSON.stringify(review.project.visualSegments);
     checkpointHistory();
     // Reordering existing media keeps the reviewed canvas ratio. Auto-detection
     // remains available when the user uploads a new first source later.
@@ -1331,22 +1336,43 @@ export function App() {
     if (ratioSource) autoRatioSourceKeyRef.current = `${ratioSource.assetId || ratioSource.id}:${ratioSource.width}x${ratioSource.height}`;
     pauseTimelineMedia();
     setIsPlaying(false);
-    setAudioSegments(nextAudio);
+    setScript(next.script);
+    setAudioSegments(next.audioSegments);
     setCaptionSegments(next.captionSegments);
-    setVisualOverlaySegments(nextOverlays);
+    setTimelineMarkers(next.timelineMarkers);
+    setCaptionsEnabled(next.captionsEnabled);
+    setVisualOverlaySegments(next.visualOverlaySegments);
     setStickerSegments(next.stickerSegments);
     setMusicSegments(next.musicSegments);
     setMusicStart(next.musicStart);
+    setMusicVolume(next.musicVolume);
+    setMusicName(next.musicName || "");
+    setMusicDuration(next.musicDuration || 0);
+    if (next.musicBlob !== musicBlob) {
+      const nextMusicUrl = next.musicUrl || (next.musicBlob ? URL.createObjectURL(next.musicBlob) : "");
+      musicUrlRef.current = nextMusicUrl;
+      setMusicBlob(next.musicBlob);
+      setMusicUrl(nextMusicUrl);
+      setMusicPeaks(next.musicPeaks || []);
+    }
     setSourceAudioStart(next.sourceAudioStart);
-    commitVisualSegments(nextVisuals, message, firstChanged?.index ?? 0);
-    currentTimeRef.current = firstChanged?.start ?? 0;
-    setCurrentTime(firstChanged?.start ?? 0);
+    setTrackVisibility(next.trackVisibility);
+    if (visualsChanged) {
+      if (nextVisuals.length) commitVisualSegments(nextVisuals, message, firstChanged?.index ?? 0);
+      else clearImageTrack(message);
+    } else notify(message);
+    const focusTime = Number.isFinite(review.focusTime) ? review.focusTime : firstChanged?.start ?? currentTime;
+    const nextTime = Math.min(Math.max(0, focusTime), Math.max(0, review.duration));
+    currentTimeRef.current = nextTime;
+    setCurrentTime(nextTime);
   };
   const webMcp = useWebMcpEditor({
-    language: activeLanguage, visualSegments, visualOverlaySegments, audioSegments,
+    language: activeLanguage, visualSegments, visualOverlaySegments, audioSegments, musicSegments,
     sourceAudioBlob, musicBlob, audioBlob, rippleEditing, getProjectSnapshot,
+    assets: userAssets, getRuntimeProject: getBrowserRuntimeProject,
     currentTime, duration: exportContentDuration, historySignature,
     createArchive: createCurrentArchive, download: downloadBlob, notify,
+    exportVideo: handleExportVideo, exportSettings, exportContentDuration, ratio, exporting,
     applyReview: applyBrowserReview,
     undo: () => { pauseTimelineMedia(); undo(); },
     seek: (time) => { pauseTimelineMedia(); setIsPlaying(false); seekTo(time, { immediate: true }); },
@@ -1474,6 +1500,7 @@ export function App() {
           previewVisualMuted={shouldMuteEmbeddedVideoAudio(previewVisualSegment, {
             sourceAudioBlob,
             sourceAudioAssetId,
+            sourceAudioLinked,
             linkedSegments: linkedSourceAudioSegments,
           })}
           previewTransition={previewTransition}

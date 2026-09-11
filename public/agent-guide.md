@@ -6,12 +6,14 @@ Timeline Studio is a free, open-source, local-first browser video editor. Its ca
 
 The editor registers structured WebMCP tools when the browser provides a supported native API. A compatible agent host can inspect the actual project, preview a supported edit, apply that preview, and continue in the same visible timeline as the user. WebMCP remains experimental; a page advertising these tools does not guarantee that every browser or agent can discover or invoke them.
 
-- Read the project, tracks, clips, and existing transcript.
-- Preview a complete main-visual sequence reorder or an eligible basic source trim.
+- Read the project, tracks, clips, existing transcript, timeline markers and available editor assets.
+- Preview caption changes, audio/music volume and fades, muting, markers, and supported main-visual split/delete/duplicate/reorder/trim operations.
+- Insert ready editor assets into supported tracks and add picture-in-picture clips with an initial transform.
 - Review the semantic diff before applying. A changed project invalidates the preview.
 - Seek the preview playhead, undo the latest unchanged agent edit, and download a new editable `.timeline` project copy.
+- Prepare video export settings, then start the real browser export with a retry key, inspect progress and actual output metadata, or cancel the running job.
 
-The current browser tools do not expose arbitrary JavaScript execution, remote generation, media upload, or video rendering. Browser AI generation and rendered-video export remain separate editor workflows. Project saving creates a `.timeline` archive; it is not a finished video.
+The 15 browser tools do not expose arbitrary JavaScript execution, arbitrary URL or filesystem imports, remote generation, media upload, or AI model execution. Asset insertion uses media already available in the editor. Project saving creates a `.timeline` archive; video export separately renders a finished file through the shared editor pipeline. Export receipts report the actual format and bytes, including a WebM fallback when an MP4 compatibility transcode fails. A triggered browser download is not proof that the host has verified the file on disk.
 
 Use the [browser editing Skill](/.well-known/agent-skills/edit-timeline-studio-browser/SKILL.md) for the tool workflow. Discover the actual page tool schemas for parameters and current availability. The [integration reference](https://github.com/MartinDelophy/ai-video-editor/blob/main/docs/webmcp.md) documents the implementation and supported editing subset.
 

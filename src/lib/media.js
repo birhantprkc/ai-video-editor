@@ -1694,7 +1694,7 @@ export async function exportBrowserVideo({
   const audioInputs = [
     ...voiceAudioSegments.map((segment) => ({
       blob: segment.blob,
-      volume: segment.volume ?? 1,
+      volume: segment.muted === true ? 0 : segment.volume ?? 1,
       role: "voice",
       start: Math.max(0, segment.start || 0),
       sourceOffset: Math.max(0, segment.sourceStart || 0),
@@ -1726,7 +1726,7 @@ export async function exportBrowserVideo({
         ? [{ blob: sourceAudioBlob, volume: sourceAudioVolume, role: "source", start: Math.max(0, sourceAudioStart || 0), spatialEffect: sourceAudioSpatialEffect, spatialAmount: sourceAudioSpatialAmount }]
         : []),
     ...(musicBlob ? (musicSegments.length ? musicSegments.map((segment) => ({
-      blob: musicBlob, volume: segment.volume ?? musicVolume, role: "music",
+      blob: musicBlob, volume: segment.muted === true ? 0 : segment.volume ?? musicVolume, role: "music",
       start: Math.max(0, segment.start || 0), sourceOffset: Math.max(0, segment.sourceStart || 0),
       sourceDuration: Math.max(0, segment.sourceDuration || (segment.duration || 0) * normalizeVisualPlaybackRate(segment.playbackRate)),
       playbackRate: normalizeVisualPlaybackRate(segment.playbackRate), outputDuration: Math.max(0, segment.duration || 0),
